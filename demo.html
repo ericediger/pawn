@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Cost Forecaster v1.0 — demo</title>
+<style>
+  /* ── Brand tokens (per Product Lead) ─────────────────────────── */
+  :root{
+    --blue:#008AC9; --green:#75C044; --magenta:#E03288;
+    --navy:#003043; --grey:#3A3D3F;
+    --bg:#F4F6F7; --panel:#FFFFFF; --line:#D9DEE1; --tint:#E8F5FB;
+    --tint-green:#EEF7E5; --tint-magenta:#FCE9F2; --muted:#6E7679;
+    --radius:6px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--grey);
+    font-family:Arial, Helvetica, sans-serif; font-size:14.5px; line-height:1.5;
+    padding-bottom:180px;
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important} }
+  :focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+  .num{font-variant-numeric:tabular-nums}
+
+  .wrap{max-width:1220px; margin:0 auto; padding:0 20px 28px}
+
+  /* ── Header band ─────────────────────────────────────────────── */
+  .band{background:var(--navy); color:#fff; padding:22px 0 18px; margin-bottom:22px}
+  .band .wrap{padding-bottom:0}
+  .band h1{font-size:24px; font-weight:bold; margin:0 0 4px}
+  .band h1 .pieces{color:var(--blue); letter-spacing:2px; margin-right:8px}
+  .band h1 .ver{font-size:12px; font-weight:normal; color:#9FC2D3; margin-left:8px}
+  .band .sub{margin:0; color:#C3D6DF; font-size:13px; max-width:90ch}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px}
+  button{
+    font:inherit; font-size:13px; cursor:pointer; border-radius:var(--radius);
+    border:1px solid #2A586E; background:#0E4259; color:#fff; padding:7px 13px;
+  }
+  button:hover{background:#155270}
+  button.primary{background:var(--blue); border-color:var(--blue); font-weight:bold}
+  button.primary:hover{background:#0099DE}
+  .wrap button.lt{background:#fff; border-color:var(--line); color:var(--grey)}
+  .wrap button.lt:hover{background:var(--tint)}
+  #status{
+    font-size:12.5px; color:#C3D6DF; border-left:3px solid var(--blue);
+    padding:6px 10px; margin-top:10px; background:rgba(255,255,255,.06);
+  }
+  .privacy{font-size:11.5px; color:#7FA2B2; margin-top:8px}
+
+  /* ── Panels ──────────────────────────────────────────────────── */
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px 20px; margin-top:20px;
+  }
+  .card h2{font-size:16px; font-weight:bold; color:var(--navy); margin:0 0 4px}
+  .card .hint{color:var(--muted); font-size:12.5px; margin:0 0 14px}
+
+  .drivers{display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:16px 26px}
+  .field label{display:block; font-size:11px; font-weight:bold; letter-spacing:.4px; color:var(--muted); text-transform:uppercase; margin-bottom:5px}
+  .field .pair{display:flex; align-items:center; gap:10px}
+  input[type=number], select{
+    font:inherit; font-size:13.5px; color:var(--grey);
+    background:#fff; border:1px solid var(--line); border-radius:4px; padding:6px 8px; width:110px;
+  }
+  select{width:100%}
+  input[type=range]{flex:1; accent-color:var(--blue); min-width:80px}
+  .derived{font-size:12.5px; color:var(--muted); margin-top:8px}
+
+  /* ── Tier cards ──────────────────────────────────────────────── */
+  .tiers{display:grid; grid-template-columns:repeat(auto-fit,minmax(335px,1fr)); gap:16px; margin-top:14px}
+  .tier{position:relative; background:var(--panel); border:1px solid var(--line); border-top:3px solid var(--blue); border-radius:var(--radius); padding:14px 16px 12px}
+  .tier-head{display:flex; align-items:baseline; gap:8px; margin-bottom:10px}
+  .tier-head .piece{font-size:19px; color:var(--navy)}
+  .tier-head input.tname{font-size:15px; font-weight:bold; color:var(--navy); border:none; background:transparent; border-bottom:1px dashed transparent; width:50%; padding:0}
+  .tier-head input.tname:hover,.tier-head input.tname:focus{border-bottom-color:var(--line)}
+  .tier-head .rm{margin-left:auto; background:none; border:none; color:var(--muted); font-size:12px; padding:2px 4px}
+  .tier-head .rm:hover{color:var(--magenta); background:none}
+  .ordbadge{font-size:10px; font-weight:bold; color:#fff; background:var(--navy); border-radius:3px; padding:1px 5px; letter-spacing:.4px}
+  .headbtns{margin-left:auto; display:flex; gap:2px; align-items:center}
+  .headbtns .rm{margin-left:0}
+  /* tier tooltips */
+  .tipwrap{position:relative; display:inline-flex; align-items:center; gap:6px; cursor:help; border-radius:4px}
+  .tipwrap .qi{display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; background:var(--tint); color:var(--blue); border:1px solid var(--blue); font-size:10px; font-weight:bold; line-height:1}
+  .tipbox{display:none; position:absolute; top:calc(100% + 8px); left:-6px; z-index:60; width:270px; background:#fff; color:var(--grey); border:1px solid var(--blue); border-radius:var(--radius); box-shadow:0 6px 18px rgba(0,48,67,.18); padding:9px 11px; font-size:12px; font-weight:normal; line-height:1.5}
+  .tipwrap:hover .tipbox, .tipwrap:focus .tipbox, .tipwrap:focus-within .tipbox{display:block}
+  /* tiering primer */
+  .tiers-help{margin-top:4px}
+  .tiers-help summary{cursor:pointer; font-size:12.5px; color:var(--blue); font-weight:bold; list-style:none}
+  .tiers-help summary::-webkit-details-marker{display:none}
+  .tiers-help summary::before{content:"\25B8 "}
+  .tiers-help[open] summary::before{content:"\25BE "}
+  .tiers-help p{font-size:12.5px; color:var(--grey); margin:8px 0 2px; max-width:100ch; line-height:1.55}
+  @media print{ .tipwrap .qi{display:none} .tipbox{display:none!important} }
+  .tgrid{display:grid; grid-template-columns:1fr 1fr; gap:9px 14px}
+  .tgrid .full{grid-column:1/-1}
+  .tgrid label{font-size:10.5px}
+  .tgrid input[type=number],.tgrid select{width:100%}
+  .cache-note{font-size:11.5px; color:var(--muted); background:var(--bg); border-radius:4px; padding:6px 8px}
+  .tier-out{margin-top:11px; padding-top:9px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px}
+  .tier-out .money{font-size:18px; font-weight:bold; color:var(--navy)}
+  .tier-out .per{font-size:12px; color:var(--muted)}
+  .warn{margin-top:7px; font-size:12px; color:var(--magenta)}
+  .share-badge{display:inline-block; font-size:12px; font-weight:bold; padding:2px 10px; border-radius:20px; background:var(--tint); color:var(--navy); border:1px solid var(--blue); margin-left:10px}
+  .share-badge.bad{background:var(--tint-magenta); border-color:var(--magenta); color:var(--magenta)}
+  .add-row{margin-top:12px; display:flex; gap:8px}
+  .add-row button{background:#fff; border:1px dashed var(--line); color:var(--grey)}
+  .add-row button:hover{background:var(--tint)}
+
+  /* ── Tables ──────────────────────────────────────────────────── */
+  table{width:100%; border-collapse:collapse; margin-top:12px; font-size:12.5px}
+  th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); border-bottom:2px solid var(--navy); padding:6px 7px; white-space:nowrap}
+  td{border-bottom:1px solid var(--line); padding:5px 7px; vertical-align:middle}
+  tbody tr:nth-child(even){background:#F8FAFB}
+  td .prov{font-size:10.5px; color:var(--muted); display:block}
+  td input[type=number]{width:74px; padding:3px 5px; font-size:12px}
+  .table-scroll{overflow-x:auto}
+  .dash{color:#B7BEC1}
+
+  .chip{display:inline-block; font-size:10.5px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap}
+  .chip.bundled{background:#E9ECED; color:var(--grey)}
+  .chip.refreshed{background:var(--tint-green); color:#3F7A14; border:1px solid var(--green)}
+  .chip.partial{background:var(--tint); color:#005A85; border:1px solid var(--blue)}
+  .chip.manual_override{background:var(--tint-magenta); color:#A11B5D; border:1px solid var(--magenta)}
+  .chip.not_found{background:#fff; color:var(--muted); border:1px dashed var(--line)}
+  td button.mini{background:none; border:none; color:var(--blue); font-size:11.5px; padding:2px 4px}
+  td button.mini:hover{text-decoration:underline; background:none}
+  td button.mini.del{color:var(--magenta)}
+
+  details.card summary{cursor:pointer; font-size:16px; font-weight:bold; color:var(--navy); list-style:none}
+  details.card summary::-webkit-details-marker{display:none}
+  details.card summary::after{content:"▸"; float:right; color:var(--muted)}
+  details[open].card summary::after{content:"▾"}
+  details.card summary .mutedlbl{font-size:12px; font-weight:normal; color:var(--muted)}
+  .ratecard-actions{margin-top:12px; display:flex; gap:8px; flex-wrap:wrap}
+  .catalog-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:12px 0}
+  .catalog-controls .field{flex:1;min-width:180px}
+  .catalog-controls input,.catalog-controls select{width:100%;font:inherit;padding:7px;border:1px solid var(--line);border-radius:4px}
+  #catalogResults{max-height:360px;overflow:auto}
+  #catalogResults table{margin-top:0}
+  #catalogResults th{position:sticky;top:0;background:white;z-index:1}
+  button:disabled{cursor:default;opacity:.6}
+  .source-link{color:var(--blue)}
+  #catalogInfo{font-size:12.5px;color:var(--muted)}
+  .fineprint{font-size:11.5px; color:var(--muted); margin-top:10px; line-height:1.55}
+
+  /* ── Scenario + sensitivity ──────────────────────────────────── */
+  .pin-actions{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px}
+  .pin-actions button{background:#fff; border:1px solid var(--line); color:var(--grey)}
+  .pin-actions button:hover{background:var(--tint)}
+  .pos{color:var(--magenta); font-weight:bold}
+  .neg{color:#4D8F1F; font-weight:bold}
+  .sense-row{display:flex; align-items:center; gap:10px; margin:6px 0}
+  .sense-row .lbl{flex:0 0 290px; font-size:12.5px}
+  .sense-row .barbox{flex:1; background:var(--bg); border-radius:4px; height:14px; overflow:hidden}
+  .sense-row .bar{height:100%;display:block}
+  .sense-row .bar.up{background:var(--magenta)}
+  .sense-row .bar.down{background:var(--green)}
+  .sense-row .val{flex:0 0 170px; font-size:12px; text-align:right}
+
+  /* ── Summary bar ─────────────────────────────────────────────── */
+  #clock{position:fixed; left:0; right:0; bottom:0; z-index:50; background:var(--navy); border-top:3px solid var(--blue)}
+  #clock .inner{max-width:1220px; margin:0 auto; padding:9px 20px 11px}
+  .material{display:flex; height:24px; border-radius:4px; overflow:hidden; font-size:11px; font-weight:bold}
+  .material .seg{display:flex; align-items:center; justify-content:center; gap:5px; white-space:nowrap; overflow:hidden; min-width:0}
+  .material .seg:nth-child(odd){background:var(--blue); color:#fff}
+  .material .seg:nth-child(even){background:var(--green); color:var(--navy)}
+  .clock-faces{display:flex; gap:16px; margin-top:8px; flex-wrap:wrap; color:#fff}
+  .face{flex:1; min-width:200px}
+  .face .lbl{font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:#8FB4C5}
+  .face .big{font-size:26px; font-weight:bold; line-height:1.15}
+  .face.baseline .big{color:#9FC2D3}
+  .face .sub{font-size:11.5px; color:#8FB4C5}
+  .delta{flex:1.25; min-width:250px; border-left:1px solid #1A4A60; padding-left:16px}
+  .delta .big{font-size:20px; line-height:1.25}
+  .delta .big b.save{color:var(--green)} .delta .big b.over{color:var(--magenta)}
+  .delta .sub{font-size:11.5px; color:#8FB4C5}
+  .splitbar{display:flex; height:6px; border-radius:4px; overflow:hidden; margin-top:6px}
+  .splitbar .in{background:#66C3E6} .splitbar .out{background:var(--green)}
+  .legend{font-size:10.5px; color:#8FB4C5; margin-top:4px}
+  .legend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin:0 4px 0 10px; transform:translateY(1px)}
+  .legend i.in{background:#66C3E6} .legend i.out{background:var(--green)}
+
+  @media (max-width:768px){
+    body{padding-bottom:250px}
+    .face .big{font-size:21px}
+    .delta{border-left:none; padding-left:0; border-top:1px solid #1A4A60; padding-top:8px}
+    .sense-row .lbl{flex-basis:150px}
+    .sense-row .val{flex-basis:120px}
+  }
+
+  @media print{
+    body{background:#fff; padding-bottom:0}
+    .band{background:#fff; color:#000; border-bottom:2px solid var(--navy)}
+    .band h1,.band .sub{color:#000}
+    .toolbar,.add-row,.tier-head .rm,#status,.privacy,.ratecard-actions,.pin-actions,input[type=range],td button.mini{display:none!important}
+    .card,.tier{border:1px solid #999; break-inside:avoid}
+    #clock{position:static; background:#fff; border-top:2px solid var(--navy)}
+    #clock *{color:#000!important}
+    .material .seg:nth-child(odd){background:#CFE9F5} .material .seg:nth-child(even){background:#E4F2D6}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+<div class="band">
+  <div class="wrap">
+    <h1><span class="pieces">&#9823;&#9822;&#9820;&#9819;</span>LLM Cost Forecaster <span class="ver">v1.0 — live model catalog</span></h1>
+    <p class="sub">Tiered routing, priced under each provider's own cache and batch rules. Directional estimate for local scenario planning. Actual cost may vary by provider terms, cache behavior, tool usage, regional routing, enterprise discounts, and workload shape.</p>
+    <div class="toolbar">
+      <button class="primary" id="btnRefresh">Refresh models &amp; prices</button>
+      <button id="btnCSV">Download CSV</button>
+      <button id="btnSave">Save scenario (JSON)</button>
+      <button id="btnLoad">Load scenario</button>
+      <button id="btnPrint">Print summary</button>
+      <input type="file" id="fileLoad" accept="application/json" style="display:none">
+    </div>
+    <div id="status" role="status" aria-live="polite"></div>
+    <p class="privacy">Scenario and cached rates stay in this browser. Public model metadata refreshes on open and hourly while visible; no API key or scenario upload is required.</p>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section class="card">
+    <h2>Global drivers</h2>
+    <p class="hint">Scale inputs apply to every tier. Traffic is then split by each tier's share.</p>
+    <div class="drivers">
+      <div class="field"><label for="users">Active users</label>
+        <div class="pair"><input type="range" id="usersR" min="50" max="50000" step="50"><input type="number" id="users" min="1" step="50" class="num"></div></div>
+      <div class="field"><label for="rpd">Requests per user per day</label>
+        <div class="pair"><input type="range" id="rpdR" min="1" max="200" step="1"><input type="number" id="rpd" min="1" step="1" class="num"></div></div>
+      <div class="field"><label for="days">Working days per month</label>
+        <div class="pair"><input type="range" id="daysR" min="1" max="31" step="1"><input type="number" id="days" min="1" max="31" step="1" class="num"></div></div>
+      <div class="field"><label for="escOverhead">Escalation payload overhead %</label>
+        <div class="pair"><input type="range" id="escOverheadR" min="0" max="100" step="5"><input type="number" id="escOverhead" min="0" max="200" step="5" class="num"></div></div>
+      <div class="field"><label for="baseline">Baseline model (the &#9819; everything would otherwise use)</label>
+        <select id="baseline"></select></div>
+    </div>
+    <div class="derived num" id="reqTotal"></div>
+    <p class="hint" style="margin:8px 0 0">The baseline and tier model menus include the full loaded catalog, grouped by provider with newest additions first. Choosing a model adds its rates automatically.</p>
+  </section>
+
+  <section>
+    <div class="card" style="padding-bottom:10px">
+      <h2 style="display:inline">Routing tiers <span class="share-badge num" id="shareBadge"></span></h2>
+      <p class="hint" style="margin-top:6px">Tiering means sending each request to the cheapest model that's good enough for it, instead of one model for everything. A tier is one slice of that traffic: pick its model, its entry share, and its workload weight — hover a tier's <strong>?</strong> for what each class is for. Tier order (T1 &#8594; Tn) is the escalation path: requests that fail a tier are retried one tier up, and the failed attempt still gets billed. Cache and batch controls follow the selected model's pricing rules.</p>
+      <details class="tiers-help">
+        <summary>New to tiered routing? A 30-second primer</summary>
+        <p>Most requests don't need the most capable model. Tiered routing splits traffic by difficulty: a cheap high-volume tier handles routine work (<strong>Pawns</strong>), mid-priced workhorses cover everyday tasks (<strong>Knights</strong>), flagship models take the heavy lifting (<strong>Rooks</strong>), and frontier models are saved for the hardest, highest-stakes problems (<strong>Queen</strong>). Requests that a tier can't handle <strong>escalate</strong> to the next tier up — you pay for the failed attempt and the retry, which is why the escalation rate is one of the levers below. Because prices differ 10&#8211;25&#215; between tiers, the traffic mix &#8212; not the vendor &#8212; is the biggest cost decision you make. The chess names encode the logic: a set gives you eight pawns and one queen, and a healthy routing mix looks the same. The bar at the bottom shows what your mix costs versus sending everything to the Queen.</p>
+      </details>
+    </div>
+    <div class="tiers" id="tiers"></div>
+    <div class="add-row">
+      <button id="btnAddTier">+ Add a tier</button>
+      <button id="btnNormalize">Normalize shares to 100%</button>
+      <button id="btnBlueprint" title="3 tiers, 70/20/10 entry mix, escalation 10%/5%">Load Blueprint 3-tier preset</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="catalogTitle">
+    <h2 id="catalogTitle">Discover models</h2>
+    <p class="hint">All providers with published text token prices on OpenRouter. Every listed model is already selectable in the baseline and tier menus. Add a model here to keep its rates in your rate card for comparison. Newest means added to OpenRouter; capability rankings require separate benchmark and workload evaluation.</p>
+    <p id="catalogInfo" role="status" aria-live="polite"></p>
+    <div class="catalog-controls">
+      <div class="field"><label for="catalogSearch">Search models</label><input id="catalogSearch" type="search" placeholder="Model name or provider"></div>
+      <div class="field"><label for="catalogProvider">Provider</label><select id="catalogProvider"><option value="">All providers</option></select></div>
+      <div class="field"><label for="catalogSort">Sort</label><select id="catalogSort"><option value="newest">Newest added first</option><option value="input">Input price: low to high</option><option value="output">Output price: low to high</option><option value="name">Name</option></select></div>
+    </div>
+    <div id="catalogResults" class="table-scroll"></div>
+    <button class="lt" id="catalogMore" hidden>Show 50 more</button>
+  </section>
+
+  <details class="card" id="rateBox" open>
+    <summary>Rate card <span class="mutedlbl" id="rateDate"></span></summary>
+    <p class="hint" style="margin-top:8px">USD per 1M tokens. Edit any figure to set a manual override — overrides are preserved on refresh until you reset them. "&#8212;" means the provider has no published price for that field.</p>
+    <div class="table-scroll">
+      <table id="rateTable">
+        <thead><tr>
+          <th>Model</th><th>Status</th><th>In</th><th>Out</th><th>Cache read</th><th>Write default</th><th>Write 1h</th><th>Batch in</th><th>Batch out</th><th>Ctx</th><th>Notes</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="ratecard-actions">
+      <button class="lt" id="btnAddModel">+ Add custom model</button>
+      <button class="lt" id="btnResetRates">Reset overrides to source rates</button>
+    </div>
+    <p class="fineprint" id="finePrint">
+      Live prices are OpenRouter's published top-provider metadata, not a quote for a direct provider contract. Cache rates and default write duration depend on the model; a 1-hour rate is used only when explicitly supplied. Unknown cache rates use ordinary input pricing.
+      Batch uses the exact model's published :batch variant, including its own cache prices. Missing batch terms receive no assumed discount. Imported or bundled discount assumptions are labeled estimates.
+      Published context-only pricing overrides apply to the whole request above their threshold. Time-dependent or unrecognized conditions are flagged and excluded.
+      Not modeled: regional-routing uplifts, tools, media, cache storage duration charges, and separately priced reasoning tokens. The reasoning multiplier assumes output-token billing. Cache eligibility and hit rates remain workload assumptions.
+      Escalation: tier order (T1 &#8594; Tn) is the escalation path; failed attempts are billed in full at their tier, escalated requests are re-billed at the destination tier's token profile with the payload overhead applied to input, and escalated volume is not batch-eligible. The all-queen baseline assumes a single model handles each entry request once, with no escalation.
+    </p>
+  </details>
+
+  <section class="card">
+    <h2>Scenario comparison</h2>
+    <p class="hint">Pins store the workload (drivers, tiers, shares) and are re-priced against the live rate card, so a price edit flows through every pinned scenario.</p>
+    <div class="pin-actions">
+      <button id="pinCurrent">Pin current</button>
+      <button id="pinHigh">+ High adoption (users &#215;2, req/day &#215;1.25)</button>
+      <button id="pinWorst">+ Worst case (no cache, no batch, reasoning &#215;1.5)</button>
+      <button id="pinOpt">+ Optimized levers (cache &#8805;80%, batch &#8805;50% where supported)</button>
+    </div>
+    <div class="table-scroll"><table id="pinTable">
+      <thead><tr><th>Scenario</th><th>$/month</th><th>&#916; vs current</th><th>&#916;%</th><th>$/1K req</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Largest cost drivers</h2>
+    <p class="hint">Deterministic one-at-a-time sensitivity on the current scenario: percentage drivers are perturbed +10%, rate drivers +10 points, and the mix test moves 10 points of traffic from the cheapest tier per request to the priciest. Ranked by absolute impact.</p>
+    <div id="sense"></div>
+  </section>
+
+</div>
+
+<div id="clock" role="region" aria-label="Cost summary">
+  <div class="inner">
+    <div class="material" id="material"></div>
+    <div class="clock-faces">
+      <div class="face">
+        <div class="lbl">Your mix — monthly</div>
+        <div class="big num" id="totalMix" aria-live="polite">$0</div>
+        <div class="sub num" id="subMix"></div>
+        <div class="splitbar"><div class="in" id="barIn"></div><div class="out" id="barOut"></div></div>
+        <div class="legend"><i class="in"></i>input &amp; cache<i class="out"></i>output (incl. reasoning)</div>
+      </div>
+      <div class="face baseline">
+        <div class="lbl">All-queen baseline</div>
+        <div class="big num" id="totalBase">$0</div>
+        <div class="sub" id="subBase"></div>
+      </div>
+      <div class="delta">
+        <div class="big" id="deltaLine"></div>
+        <div class="sub num" id="discLine"></div>
+        <div class="sub num" id="escLine"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ ENGINE (pure functions, no DOM) ════════ -->
+<script id="engine">
+"use strict";
+function clamp(v,a,b){ return Math.min(b, Math.max(a, +v||0)); }
+function csvCell(value){
+  const s=String(value);
+  return '"'+(/^\s*[=+@-]/.test(s)?"'":"")+s.replace(/"/g,'""')+'"';
+}
+
+// Only context-only overrides can be evaluated from a monthly token profile.
+function streamPrices(prices, overrides, tin, warnings){
+  const result={...prices};
+  for(const o of overrides||[]){
+    if(!o || !Number.isFinite(o.minPromptTokens) || o.unsupported){
+      warnings.push("Time-dependent or unsupported pricing conditions are excluded; default rates used for those conditions.");
+      continue;
+    }
+    if(tin>o.minPromptTokens) Object.assign(result,o.prices);
+  }
+  return result;
+}
+
+/** Price one request stream (volume + token profile) under a model's pricing rules. */
+function priceStream(reqs, tin, tout, t, m, batchEligible){
+  const R = m.pricingRules;
+  const warnings = [];
+  const P = streamPrices(m.tokenPricing,R.priceOverrides,tin,warnings);
+  const inM  = reqs * tin / 1e6;
+  const outM = reqs * tout * (t.reason || 1) / 1e6;
+  if(m.ctxK&&tin+tout*(t.reason||1)>m.ctxK*1000)warnings.push("Request profile exceeds the published context window, including escalation overhead.");
+  if(R.maxOutputTokens&&tout*(t.reason||1)>R.maxOutputTokens)warnings.push("Output profile exceeds the published maximum completion tokens.");
+
+  let hit = 0, wr = 0, wExcluded = false;
+  if (R.cacheMode === "none"){
+    if ((t.cache||0) > 0 || (t.cacheWrite||0) > 0)
+      warnings.push("No cache pricing for this model; cache assumptions ignored.");
+  } else {
+    hit = clamp(t.cache, 0, 100) / 100;
+    if (R.cacheMode === "read_write"){
+      wr = clamp(t.cacheWrite, 0, 100) / 100;
+      if (hit + wr > 1){ wr = 1 - hit; warnings.push("Cache hit + write share capped at 100% of input."); }
+    } else if ((t.cacheWrite||0) > 0){
+      warnings.push("No cache-write fee on this model; write share has no cost effect.");
+    }
+  }
+  const readP = (P.cacheReadPerMTok != null) ? P.cacheReadPerMTok : P.inputPerMTok;
+  let writeP = 0;
+  if (R.cacheMode === "read_write" && wr > 0){
+    writeP = (t.cacheDur === "1h") ? P.cacheWrite1hPerMTok : P.cacheWrite5mPerMTok;
+    if (writeP == null){
+      writeP = P.inputPerMTok; wExcluded = true;
+      warnings.push("Cache write pricing unavailable; ordinary input rate used. Additional write charges may apply.");
+    }
+  }
+  const effIn = P.inputPerMTok * (1 - hit - wr) + readP * hit + writeP * wr;
+  const inEff = inM * effIn;
+  const inList = inM * P.inputPerMTok;
+  const outList = outM * P.outputPerMTok;
+
+  let b = batchEligible ? clamp(t.batch, 0, 100) / 100 : 0;
+  let batchLabel = null, inBilled, outBilled;
+  if (b > 0){
+    if (R.batchMode === "explicit_prices" && P.batchInputPerMTok != null && P.batchOutputPerMTok != null){
+      const BP=R.batchPricing ? streamPrices(R.batchPricing,R.batchPriceOverrides,tin,warnings) : null;
+      if(BP){
+        const br=BP.cacheReadPerMTok ?? BP.inputPerMTok;
+        const bw=(t.cacheDur==="1h"?BP.cacheWrite1hPerMTok:BP.cacheWrite5mPerMTok) ?? BP.inputPerMTok;
+        inBilled=inEff*(1-b)+inM*b*(BP.inputPerMTok*(1-hit-wr)+br*hit+bw*wr);
+        outBilled=outList*(1-b)+outM*b*BP.outputPerMTok;
+        if((hit>0&&BP.cacheReadPerMTok==null)||(wr>0&&(t.cacheDur==="1h"?BP.cacheWrite1hPerMTok:BP.cacheWrite5mPerMTok)==null))
+          warnings.push("Batch cache price unavailable; batch ordinary input rate used for that share.");
+      } else {
+        // Legacy scenarios lack separate batch cache prices. Do not assume stacking.
+        inBilled=inEff*(1-b)+inM*b*P.batchInputPerMTok;
+        outBilled=outList*(1-b)+outM*b*P.batchOutputPerMTok;
+        if(hit>0||wr>0)warnings.push("Batch cache terms unverified; no cache discount applied to batch traffic.");
+      }
+      batchLabel = "explicit";
+    } else if (R.batchMode === "discount"){
+      const d = (R.defaultBatchDiscountPct != null ? R.defaultBatchDiscountPct : 50) / 100;
+      inBilled  = inEff  * (1 - b * d);
+      outBilled = outList * (1 - b * d);
+      batchLabel = "estimated";
+      warnings.push("Batch modeled as estimated discount (" + Math.round(d * 100) + "%).");
+    } else {
+      inBilled = inEff; outBilled = outList; b = 0;
+      warnings.push("Batch pricing unavailable or unverified for this model; batch share ignored.");
+    }
+  } else { inBilled = inEff; outBilled = outList; }
+
+  const total = inBilled + outBilled;
+  const listTotal = inList + outList;
+  const cacheSavings = inList - inEff;
+  const batchSavings = (inEff + outList) - total;
+  return { reqs, inputCost:inBilled, outputCost:outBilled, total,
+           listTotal, cacheSavings, batchSavings, warnings, batchLabel, wExcluded };
+}
+
+/** Tier cost = native entry traffic + escalated-in volume.
+    Escalated requests are re-billed at this tier's token profile with the
+    payload overhead applied to input, and are not batch-eligible. */
+function computeTier(g, t, m, escIn){
+  escIn = escIn || 0;
+  const entry = g.users * g.rpd * g.days * (t.share / 100);
+  const oh = 1 + clamp(g.escOverhead != null ? g.escOverhead : 30, 0, 400) / 100;
+  const nat = priceStream(entry, t.tin, t.tout, t, m, true);
+  const esc = escIn > 0 ? priceStream(escIn, t.tin * oh, t.tout, t, m, false) : null;
+  const sum = k => nat[k] + (esc ? esc[k] : 0);
+  return {
+    entry, escIn, processed: entry + escIn, reqs: entry + escIn,
+    inputCost: sum("inputCost"), outputCost: sum("outputCost"), total: sum("total"),
+    listTotal: sum("listTotal"), cacheSavings: sum("cacheSavings"), batchSavings: sum("batchSavings"),
+    escCost: esc ? esc.total : 0,
+    warnings: [...new Set([...nat.warnings, ...(esc ? esc.warnings : [])])],
+    batchLabel: nat.batchLabel, wExcluded: nat.wExcluded || (esc ? esc.wExcluded : false)
+  };
+}
+
+/** Scenario with escalation cascade. Tier order is the escalation path:
+    requests that fail tier i are retried at tier i+1 (the last tier is terminal).
+    Baseline = every entry request handled once by the baseline model (no escalation). */
+function computeScenario(g, tiers, modelsById, baselineId){
+  const base = modelsById[baselineId];
+  const mix = { total:0, input:0, output:0, cache:0, batch:0, reqs:0 };
+  let baseline = 0, escPremium = 0, escIn = 0;
+  const perTier = tiers.map((t, i) => {
+    const m = modelsById[t.modelId];
+    const r = computeTier(g, t, m, escIn);
+    const last = i === tiers.length - 1;
+    r.escOut = last ? 0 : r.processed * clamp(t.esc, 0, 100) / 100;
+    r.landed = r.processed - r.escOut;
+    escIn = r.escOut;
+    mix.total += r.total; mix.input += r.inputCost; mix.output += r.outputCost;
+    mix.cache += r.cacheSavings; mix.batch += r.batchSavings; mix.reqs += r.entry;
+    escPremium += r.escCost;
+    if (base) baseline += priceStream(r.entry, t.tin, t.tout, t, base, true).total;
+    return { tier:t, model:m, r };
+  });
+  return { perTier, mix, baseline, savings: baseline - mix.total, escPremium };
+}
+
+/** Deterministic one-at-a-time sensitivity. Returns drivers ranked by |delta|. */
+function sensitivity(g, tiers, modelsById, baselineId){
+  const baseRun = computeScenario(g, tiers, modelsById, baselineId);
+  const base = baseRun.mix.total;
+  const cp = o => JSON.parse(JSON.stringify(o));
+  const modeOf = t => (modelsById[t.modelId] || {pricingRules:{}}).pricingRules;
+  const drivers = [
+    { label:"Active users +10%",            f:(G,T)=>{ G.users*=1.1; } },
+    { label:"Requests/user/day +10%",       f:(G,T)=>{ G.rpd*=1.1; } },
+    { label:"Input tokens/request +10%",    f:(G,T)=>{ T.forEach(t=>t.tin*=1.1); } },
+    { label:"Output tokens/request +10%",   f:(G,T)=>{ T.forEach(t=>t.tout*=1.1); } },
+    { label:"Reasoning multiplier +10%",    f:(G,T)=>{ T.forEach(t=>t.reason=Math.min(4,(t.reason||1)*1.1)); } },
+    { label:"Cache hit rate +10 pts",       f:(G,T)=>{ T.forEach(t=>{ if(modeOf(t).cacheMode!=="none") t.cache=clamp((t.cache||0)+10,0,100); }); } },
+    { label:"Cache write share +10 pts",    f:(G,T)=>{ T.forEach(t=>{ if(modeOf(t).cacheMode==="read_write") t.cacheWrite=clamp((t.cacheWrite||0)+10,0,100); }); } },
+    { label:"Batch share +10 pts",          f:(G,T)=>{ T.forEach(t=>{ if(modeOf(t).cacheMode!==undefined && modeOf(t).batchMode!=="none") t.batch=clamp((t.batch||0)+10,0,100); }); } },
+    { label:"Escalation rates +5 pts",      f:(G,T)=>{ T.forEach((t,i)=>{ if(i<T.length-1) t.esc=clamp((t.esc||0)+5,0,100); }); } }
+  ];
+  if (tiers.length > 1 && baseRun.perTier.every(p=>p.r.reqs>0)){
+    drivers.push({ label:"Mix: 10 pts cheapest → priciest tier", f:(G,T)=>{
+      const perReq = baseRun.perTier.map(p=>p.r.total/p.r.reqs);
+      let lo=0, hi=0;
+      perReq.forEach((v,i)=>{ if(v<perReq[lo])lo=i; if(v>perReq[hi])hi=i; });
+      if (lo===hi) return;
+      const mv = Math.min(10, T[lo].share);
+      T[lo].share -= mv; T[hi].share += mv;
+    }});
+  }
+  const out = drivers.map(d=>{
+    const G=cp(g), T=cp(tiers); d.f(G,T);
+    const v=computeScenario(G,T,modelsById,baselineId).mix.total;
+    return { label:d.label, delta:v-base, pct: base>0 ? (v-base)/base*100 : 0 };
+  });
+  out.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+  return out;
+}
+
+/** Migrate a v1 (flat in/out/cacheIn) model record to the v0.9 schema. */
+function migrateModelV1(m){
+  if (m.tokenPricing) return m;
+  const inP=+m.in||0, outP=+m.out||0, cr=(m.cacheIn!=null)?+m.cacheIn:null;
+  const tp={ inputPerMTok:inP, outputPerMTok:outP,
+    cacheReadPerMTok:cr, cacheWrite5mPerMTok:null, cacheWrite1hPerMTok:null,
+    batchInputPerMTok:null, batchOutputPerMTok:null };
+  const rules={ cacheMode:cr==null?"none":"read_only", batchMode:"none", defaultBatchDiscountPct:null,
+    reasoningBilling:"output", longContextPolicy:"unknown" };
+  return { id:m.id, provider:m.provider, name:m.name, tier:m.tier||"Custom",
+    ctxK:m.ctxK||128, notes:(m.notes||"")+" Legacy import: cache writes and batch terms unverified.", orSlug:m.orSlug||null, custom:!!m.custom,
+    pricingSource:"imported", refreshedAt:null, refreshStatus:"partial", manual:!!m.manual,
+    tokenPricing:tp, pricingRules:rules };
+}
+if (typeof module !== "undefined") module.exports = { clamp, priceStream, computeTier, computeScenario, sensitivity, migrateModelV1 };
+</script>
+
+<!-- ════════ PUBLIC CATALOG CONTRACT (pure functions) ════════ -->
+<script id="catalog">
+"use strict";
+const PRICE_KEYS={prompt:"inputPerMTok",completion:"outputPerMTok",input_cache_read:"cacheReadPerMTok",input_cache_write:"cacheWrite5mPerMTok",input_cache_write_1h:"cacheWrite1hPerMTok"};
+function tokenRate(value){
+  if(typeof value!=="number" && (typeof value!=="string" || !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value)))return null;
+  const n=Number(value)*1e6;
+  return Number.isFinite(n)&&n>=0?Number(n.toPrecision(15)):null;
+}
+function normalizePrices(p){
+  const out={};
+  for(const [source,target] of Object.entries(PRICE_KEYS))out[target]=tokenRate(p?.[source]);
+  out.batchInputPerMTok=null;out.batchOutputPerMTok=null;
+  return out;
+}
+function normalizeOverrides(overrides){
+  if(!Array.isArray(overrides))return [];
+  return overrides.map(o=>{
+    const known=new Set([...Object.keys(PRICE_KEYS),"min_prompt_tokens"]);
+    const unsupported=!o || Object.keys(o).some(k=>!known.has(k)) || !Number.isFinite(o.min_prompt_tokens) || o.min_prompt_tokens<0;
+    const prices={};
+    for(const [source,target] of Object.entries(PRICE_KEYS)){
+      if(o && Object.hasOwn(o,source)){
+        const price=tokenRate(o[source]);
+        if(price!=null)prices[target]=price;
+        else return {unsupported:true,prices:{}};
+      }
+    }
+    return {minPromptTokens:o?.min_prompt_tokens,unsupported,prices};
+  });
+}
+function compactCatalogEntry(x){
+  return {id:x.id,name:x.name,created:x.created,context_length:x.context_length,
+    top_provider:{max_completion_tokens:x.top_provider?.max_completion_tokens},
+    architecture:x.architecture,pricing:x.pricing,expiration_date:x.expiration_date};
+}
+function normalizeCatalog(rows,now=Date.now()){
+  if(!Array.isArray(rows)||!rows.length)throw new Error("Empty or invalid model catalog");
+  const entries=new Map();let skipped=0;
+  for(const x of rows){
+    const p=normalizePrices(x?.pricing);
+    const modalities=x?.architecture?.output_modalities;
+    const expires=x?.expiration_date?Date.parse(x.expiration_date):NaN;
+    if(!x || typeof x.id!=="string" || !/^[a-z0-9_~.-]+\/[a-z0-9_~.:/-]+$/i.test(x.id) || typeof x.name!=="string" || x.name.length>1000 ||
+      !Array.isArray(modalities)||!modalities.includes("text")||p.inputPerMTok==null||p.outputPerMTok==null||
+      (Number.isFinite(expires)&&expires<=now)) {skipped++;continue;}
+    if(entries.has(x.id))throw new Error("Duplicate model ID in catalog: "+x.id);
+    entries.set(x.id,compactCatalogEntry(x));
+  }
+  if(!entries.size)throw new Error("Catalog contains no valid priced text models");
+  return {entries:[...entries.values()],skipped};
+}
+function catalogModel(x,entries,ts,existing){
+  const tp=normalizePrices(x.pricing), batch=entries.find(y=>y.id===x.id+":batch");
+  const bp=batch?normalizePrices(batch.pricing):null;
+  if(bp){tp.batchInputPerMTok=bp.inputPerMTok;tp.batchOutputPerMTok=bp.outputPerMTok;}
+  const provider=x.id.split("/")[0];
+  const caveats=["OpenRouter top-provider text rates; tools/media/storage fees excluded."];
+  if(x.pricing?.overrides?.length)caveats.push("Conditional pricing: context-only thresholds modeled; other conditions excluded.");
+  if(x.pricing?.internal_reasoning!=null && tokenRate(x.pricing.internal_reasoning)!==tp.outputPerMTok)
+    caveats.push("Separate reasoning-token rate not modeled.");
+  if(x.expiration_date)caveats.push("Endpoint expires "+x.expiration_date+".");
+  if(provider!=="anthropic"&&provider!=="openai"&&tp.cacheWrite5mPerMTok!=null){
+    // Some providers use this field for storage or duration-dependent charges.
+    // The feed alone does not establish token-write billing semantics.
+    tp.cacheWrite5mPerMTok=null;tp.cacheWrite1hPerMTok=null;
+    if(bp){bp.cacheWrite5mPerMTok=null;bp.cacheWrite1hPerMTok=null;}
+    caveats.push("Cache-write/storage semantics unverified; no write discount modeled.");
+  }
+  const rules={cacheMode:tp.cacheWrite5mPerMTok!=null||tp.cacheWrite1hPerMTok!=null?"read_write":tp.cacheReadPerMTok!=null?"read_only":"none",
+    batchMode:bp?"explicit_prices":"none",defaultBatchDiscountPct:null,reasoningBilling:"output",longContextPolicy:"unknown",
+    priceOverrides:normalizeOverrides(x.pricing?.overrides),batchPricing:bp,batchPriceOverrides:normalizeOverrides(batch?.pricing?.overrides),
+    cacheWriteLabel:provider==="anthropic"?"5 minutes (published)":"Default duration (published)",
+    maxOutputTokens:Number.isFinite(x.top_provider?.max_completion_tokens)&&x.top_provider.max_completion_tokens>0?x.top_provider.max_completion_tokens:null};
+  // Do not reintroduce unverified storage/write prices through conditional overrides.
+  if(provider!=="anthropic"&&provider!=="openai")for(const o of [...rules.priceOverrides,...rules.batchPriceOverrides]){
+    delete o.prices.cacheWrite5mPerMTok;delete o.prices.cacheWrite1hPerMTok;
+  }
+  const providerNames={openai:"OpenAI",anthropic:"Anthropic",google:"Google",mistralai:"Mistral"};
+  const providerName=Object.hasOwn(providerNames,provider)?providerNames[provider]:provider;
+  return {id:existing?.id||x.id,orSlug:x.id,provider:providerName,name:x.name,
+    tier:existing?.tier||"Catalog",ctxK:Number.isFinite(x.context_length)&&x.context_length>0?x.context_length/1000:0,
+    notes:caveats.join(" "),custom:existing?.custom??true,manual:false,pricingSource:"openrouter",refreshedAt:ts,
+    refreshStatus:"refreshed",tokenPricing:tp,pricingRules:rules};
+}
+function mergeCatalog(models,entries,ts){
+  const index=new Map(entries.map(x=>[x.id,x]));
+  const counts={updated:0,missing:0,manual:0};
+  const result=models.map(m=>{
+    if(m.manual){counts.manual++;return m;}
+    if(!m.orSlug)return m;
+    const x=index.get(m.orSlug);
+    if(!x){counts.missing++;return {...m,refreshStatus:"not_found"};}
+    counts.updated++;return catalogModel(x,entries,ts,m);
+  });
+  return {models:result,counts};
+}
+function validateScenario(raw){
+  const fail=msg=>{throw new Error(msg);};
+  const number=(v,min,max,label)=>{if(typeof v!=="number"||!Number.isFinite(v)||v<min||v>max)fail("Invalid "+label);return v;};
+  const str=(v,label)=>{if(typeof v!=="string"||v.length>10000)fail("Invalid "+label);return v;};
+  if(!raw||typeof raw!=="object"||!Array.isArray(raw.models)||!raw.models.length||raw.models.length>2000)fail("Invalid models");
+  const ids=new Set();
+  const validatePrice=(p,base=true)=>{
+    if(!p||typeof p!=="object")fail("Invalid token pricing");
+    const out={};
+    for(const k of [...Object.values(PRICE_KEYS),"batchInputPerMTok","batchOutputPerMTok"]){
+      out[k]=p[k]==null?null:number(p[k],0,1e9,k);
+    }
+    if(base&&(out.inputPerMTok==null||out.outputPerMTok==null))fail("Missing input/output rates");
+    return out;
+  };
+  const overrides=value=>{
+    if(value==null)return [];
+    if(!Array.isArray(value)||value.length>100)fail("Invalid conditional prices");
+    return value.map(o=>{
+      if(!o||typeof o!=="object")fail("Invalid pricing condition");
+      const prices={};
+      for(const [k,v] of Object.entries(o.prices||{})){
+        if(!Object.values(PRICE_KEYS).includes(k))fail("Unknown conditional price");
+        prices[k]=number(v,0,1e9,k);
+      }
+      return {unsupported:!!o.unsupported,minPromptTokens:o.unsupported?undefined:number(o.minPromptTokens,0,1e12,"threshold"),prices};
+    });
+  };
+  const models=raw.models.map(original=>{
+    if(!original||typeof original!=="object")fail("Invalid model");
+    if(Object.hasOwn(original,"tokenPricing")&&!original.tokenPricing)fail("Invalid token pricing");
+    if(!Object.hasOwn(original,"tokenPricing")){
+      number(original.in,0,1e9,"legacy input rate");number(original.out,0,1e9,"legacy output rate");
+      if(original.cacheIn!=null)number(original.cacheIn,0,1e9,"legacy cache rate");
+    }
+    const m=migrateModelV1(original),id=str(m.id,"model ID");
+    if(!id||ids.has(id))fail("Duplicate or empty model ID");ids.add(id);
+    const r=m.pricingRules;
+    if(!r||!["none","read_only","read_write"].includes(r.cacheMode)||!["none","discount","explicit_prices"].includes(r.batchMode))fail("Invalid pricing rules");
+    const refreshStatus=["bundled","refreshed","partial","manual_override","not_found"].includes(m.refreshStatus)?m.refreshStatus:"bundled";
+    return {id,provider:str(m.provider||"Custom","provider"),name:str(m.name,"model name"),tier:str(m.tier||"Custom","tier"),
+      ctxK:number(m.ctxK??0,0,1e9,"context"),notes:str(m.notes||"","notes"),orSlug:m.orSlug==null?null:str(m.orSlug,"source ID"),
+      custom:!!m.custom,manual:!!m.manual,pricingSource:str(m.pricingSource||"imported","source"),refreshedAt:m.refreshedAt==null?null:str(m.refreshedAt,"timestamp"),
+      refreshStatus,tokenPricing:validatePrice(m.tokenPricing),pricingRules:{cacheMode:r.cacheMode,batchMode:r.batchMode,
+        defaultBatchDiscountPct:r.defaultBatchDiscountPct==null?null:number(r.defaultBatchDiscountPct,0,100,"batch discount"),
+        reasoningBilling:str(r.reasoningBilling||"unknown","reasoning billing"),longContextPolicy:str(r.longContextPolicy||"unknown","context policy"),
+        cacheWriteLabel:str(r.cacheWriteLabel||"5 minutes (legacy assumption)","write label"),maxOutputTokens:r.maxOutputTokens==null?null:number(r.maxOutputTokens,1,1e12,"maximum output"),
+        priceOverrides:overrides(r.priceOverrides),batchPriceOverrides:overrides(r.batchPriceOverrides),batchPricing:r.batchPricing?validatePrice(r.batchPricing):null}};
+  });
+  function globals(g){
+    if(!g)fail("Missing global drivers");
+    return {users:number(g.users,1,1e9,"users"),rpd:number(g.rpd,1,1e9,"requests/day"),days:number(g.days,1,31,"days"),escOverhead:number(g.escOverhead??30,0,200,"payload overhead")};
+  }
+  function tiers(ts){
+    if(!Array.isArray(ts)||!ts.length||ts.length>100)fail("Invalid tiers");
+    return ts.map(t=>{
+      if(!t||!ids.has(t.modelId))fail("Tier references an unknown model");
+      return {name:str(t.name||"Tier","tier name"),piece:str(t.piece||"\u265F","piece"),modelId:t.modelId,
+        share:number(t.share,0,100,"share"),tin:number(t.tin,0,1e9,"input tokens"),tout:number(t.tout,0,1e9,"output tokens"),
+        cache:number(t.cache??0,0,100,"cache hit"),cacheWrite:number(t.cacheWrite??0,0,100,"cache write"),
+        cacheDur:t.cacheDur==="1h"?"1h":"5m",batch:number(t.batch??0,0,100,"batch share"),reason:number(t.reason??1,1,4,"reasoning multiplier"),esc:number(t.esc??0,0,100,"escalation")};
+    });
+  }
+  if(raw.pins!=null&&(!Array.isArray(raw.pins)||raw.pins.length>6))fail("Invalid pinned scenarios");
+  return {g:globals(raw.g),models,tiers:tiers(raw.tiers),baselineId:ids.has(raw.baselineId)?raw.baselineId:models[0].id,
+    pins:(raw.pins||[]).map(p=>{if(!p)fail("Invalid pin");return {name:str(p.name,"pin name"),g:globals(p.g),tiers:tiers(p.tiers)};})};
+}
+</script>
+
+<!-- ════════ APP ════════ -->
+<script>
+"use strict";
+const RATE_DATE = "2026-06-11";
+const AP = { cacheMode:"read_write", batchMode:"explicit_prices", defaultBatchDiscountPct:50, reasoningBilling:"output", longContextPolicy:"none" };
+const OA = { cacheMode:"read_only",  batchMode:"explicit_prices", defaultBatchDiscountPct:50, reasoningBilling:"output", longContextPolicy:"unknown" };
+const MI = { cacheMode:"read_only",  batchMode:"discount",        defaultBatchDiscountPct:50, reasoningBilling:"output", longContextPolicy:"none" };
+function M(id,provider,name,tier,ctxK,notes,orSlug,tp,rules){
+  return { id,provider,name,tier,ctxK,notes,orSlug, custom:false,
+    pricingSource:"bundled", refreshedAt:null, refreshStatus:"bundled", manual:false,
+    tokenPricing:tp, pricingRules:JSON.parse(JSON.stringify(rules)) };
+}
+const TP=(i,o,cr,w5,w1,bi,bo)=>({inputPerMTok:i,outputPerMTok:o,cacheReadPerMTok:cr,cacheWrite5mPerMTok:w5,cacheWrite1hPerMTok:w1,batchInputPerMTok:bi,batchOutputPerMTok:bo});
+
+const BUNDLED_MODELS = [
+ M("claude-fable-5","Anthropic","Claude Fable 5","Frontier",1000,"1M ctx / 128K out; 30-day retention (no ZDR)","anthropic/claude-fable-5",TP(10,50,1.00,12.50,20.00,5,25),AP),
+ M("claude-opus-4-8","Anthropic","Claude Opus 4.8","Flagship",1000,"1M ctx flat; Fast Mode $10/$50","anthropic/claude-opus-4.8",TP(5,25,0.50,6.25,10.00,2.5,12.5),AP),
+ M("claude-sonnet-4-6","Anthropic","Claude Sonnet 4.6","Workhorse",1000,"1M ctx flat, no long-context surcharge","anthropic/claude-sonnet-4.6",TP(3,15,0.30,3.75,6.00,1.5,7.5),AP),
+ M("claude-haiku-4-5","Anthropic","Claude Haiku 4.5","Lightweight",200,"High-volume default","anthropic/claude-haiku-4.5",TP(1,5,0.10,1.25,2.00,0.5,2.5),AP),
+ M("gpt-5-5","OpenAI","GPT-5.5","Flagship",1050,"922K in / 128K out; auto caching, no write fee","openai/gpt-5.5",TP(5,30,0.50,null,null,2.5,15),OA),
+ M("gpt-5-5-pro","OpenAI","GPT-5.5 Pro","Frontier",400,"Premium reasoning; batch eligibility unverified","openai/gpt-5.5-pro",TP(30,180,3.00,null,null,null,null),Object.assign({},OA,{batchMode:"none"})),
+ M("gpt-5-4","OpenAI","GPT-5.4","Workhorse",1050,">272K in: 2x in / 1.5x out surcharge (flagged, not modeled)","openai/gpt-5.4",TP(2.5,15,0.25,null,null,1.25,7.5),Object.assign({},OA,{longContextPolicy:"threshold_multiplier"})),
+ M("gpt-5-4-mini","OpenAI","GPT-5.4 Mini","Mid",400,"Context est. (~400K)","openai/gpt-5.4-mini",TP(0.75,4.5,0.075,null,null,0.375,2.25),OA),
+ M("gpt-5-4-nano","OpenAI","GPT-5.4 Nano","Lightweight",400,"Routing / extraction tier; context est.","openai/gpt-5.4-nano",TP(0.20,1.25,0.02,null,null,0.10,0.625),OA),
+ M("mistral-medium-3-5","Mistral","Mistral Medium 3.5","Flagship",256,"Open weights (mod. MIT); cached reads 10% of input","mistralai/mistral-medium-3-5",TP(1.5,7.5,0.15,null,null,null,null),MI),
+ M("mistral-large-3","Mistral","Mistral Large 3","Workhorse",256,"Open weights; cheapest output in class","mistralai/mistral-large-3",TP(0.5,1.5,0.05,null,null,null,null),MI),
+ M("magistral-medium","Mistral","Magistral Medium","Reasoning",128,"Context unverified; Medium 3.5 is newer successor","mistralai/magistral-medium",TP(2,5,0.20,null,null,null,null),MI),
+ M("mistral-small-4","Mistral","Mistral Small 4","Lightweight",256,"Corrected 2026-06-11 (was conflated with Small 3.2)","mistralai/mistral-small-2603",TP(0.15,0.60,0.015,null,null,null,null),MI),
+ M("ministral-3-8b","Mistral","Ministral 3 (8B)","Edge",128,"Symmetric pricing; on-device option","mistralai/ministral-3-8b",TP(0.15,0.15,0.015,null,null,null,null),MI)
+];
+
+const DEFAULT_TIERS = [
+ {name:"Pawns",   piece:"\u265F", modelId:"claude-haiku-4-5", share:65, tin:2000,  tout:400,  cache:70, cacheWrite:5,  cacheDur:"5m", batch:30, reason:1,   esc:10},
+ {name:"Knights", piece:"\u265E", modelId:"claude-sonnet-4-6",share:25, tin:5000,  tout:750,  cache:60, cacheWrite:5,  cacheDur:"5m", batch:10, reason:1,   esc:5},
+ {name:"Rooks",   piece:"\u265C", modelId:"gpt-5-5",          share:8,  tin:8000,  tout:1200, cache:60, cacheWrite:0,  cacheDur:"5m", batch:0,  reason:1.5, esc:5},
+ {name:"Queen",   piece:"\u265B", modelId:"claude-fable-5",   share:2,  tin:20000, tout:2500, cache:70, cacheWrite:5,  cacheDur:"5m", batch:0,  reason:2,   esc:0}
+];
+const PIECE_CYCLE=["\u265F","\u265E","\u265D","\u265C","\u265B"];
+const TIER_DESCS={
+ "Pawns":"High-volume tier and first stop in the chain: the cheapest capable models handle the bulk of routine, low-complexity requests \u2014 triage, parsing, classification. Requests they can't handle escalate one tier up. A chess set gives you eight pawns for a reason.",
+ "Knights":"Balanced tier: mid-priced workhorse models for everyday tasks that need more quality than the cheapest tier \u2014 structured outputs, drafting, moderate analysis. Catches escalations from below; passes its own failures up.",
+ "Rooks":"Heavy-lift tier: flagship models for complex reasoning, long documents, and multi-step work. Strong, but several times the cost \u2014 route here selectively.",
+ "Queen":"Frontier tier and the end of the escalation chain: the most capable and most expensive models, reserved for the hardest, highest-stakes tasks. Used sparingly by design \u2014 you only get one queen.",
+ "King & Queen":"Strategic-reasoning tier and the end of the escalation chain: frontier-class models reserved for complex analysis, ambiguity resolution, and escalated failures from the tiers below. Used sparingly by design.",
+ "_generic":"Custom tier: give it a model, an entry share, and a workload profile; its position in the chain (T1 \u2192 Tn) sets where escalations flow."
+};
+const tierDesc=t=>TIER_DESCS[t.name]||TIER_DESCS._generic;
+const STATUS_LBL={bundled:"Bundled",refreshed:"Live token rates",partial:"Partial / legacy",manual_override:"Manual",not_found:"Not in catalog"};
+
+let state = {
+  g:{users:2500, rpd:12, days:21, escOverhead:30},
+  baselineId:"claude-fable-5",
+  models:JSON.parse(JSON.stringify(BUNDLED_MODELS)),
+  tiers:JSON.parse(JSON.stringify(DEFAULT_TIERS)),
+  pins:[]
+};
+
+const $=s=>document.querySelector(s);
+const byId=()=>Object.fromEntries(state.models.map(m=>[m.id,m]));
+const fmt$=v=>{const a=Math.abs(v);return a>=1000?"$"+Math.round(v).toLocaleString("en-US"):"$"+v.toFixed(2);};
+const fmtN=v=>Math.round(v).toLocaleString("en-US");
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+function status(msg){$("#status").innerHTML=esc(msg);}
+let undoSnapshot=null;
+function showUndo(msg){
+  const el=$("#status");
+  el.innerHTML=esc(msg)+' <a href="#" id="undoLink" style="color:var(--blue);font-weight:bold;text-decoration:underline">Undo</a>';
+  const link=$("#undoLink");
+  if(link) link.addEventListener("click",e=>{
+    e.preventDefault();
+    if(undoSnapshot){ state.tiers=undoSnapshot; undoSnapshot=null; renderTiers(); recalc(); status("Reverted to your previous tiers."); }
+  });
+}
+function markManual(m){
+  m.manual=true;m.pricingSource="manual";m.refreshStatus="manual_override";m.refreshedAt=null;
+  // A manual rate card is authoritative; old conditional prices must not replace it.
+  m.pricingRules.priceOverrides=[];m.pricingRules.batchPriceOverrides=[];m.pricingRules.batchPricing=null;
+  m.notes="Manual override; conditional pricing and batch/cache stacking require explicit verification.";
+}
+
+/* ── Globals ─────────────────────────────────────────────────── */
+function bindGlobalOnce(numId,rangeId,key){
+  const n=$("#"+numId),r=$("#"+rangeId);
+  const apply=v=>{state.g[key]=clamp(v,1,key==="days"?31:1e9);n.value=state.g[key];r.value=Math.min(+r.max,state.g[key]);recalc();};
+  n.addEventListener("input",e=>apply(e.target.value));
+  r.addEventListener("input",e=>apply(e.target.value));
+}
+function syncGlobals(){
+  [["users","usersR"],["rpd","rpdR"],["days","daysR"],["escOverhead","escOverheadR"]].forEach(([k,rk])=>{
+    $("#"+k).value=state.g[k]; $("#"+rk).value=Math.min(+$("#"+rk).max,state.g[k]);
+  });
+}
+
+function selectableModels(){
+  const models=state.models.slice(),slugs=new Set(models.map(m=>m.orSlug)),ids=new Set(models.map(m=>m.id));
+  for(const x of catalogEntries){
+    if(x.id.endsWith(":batch")||slugs.has(x.id))continue;
+    const m=catalogModel(x,catalogEntries,catalogFetchedAt);
+    let suffix=2;
+    while(ids.has(m.id))m.id="openrouter:"+x.id+":"+suffix++;
+    models.push(m);slugs.add(x.id);ids.add(m.id);
+  }
+  return models;
+}
+function activateModel(id){
+  const active=state.models.find(m=>m.id===id);
+  if(active)return active;
+  const m=selectableModels().find(m=>m.id===id);
+  if(!m){status("That model is no longer in the loaded catalog. Refresh and choose another model.");return null;}
+  state.models.push(m);
+  return m;
+}
+function selectBaselineModel(id){
+  const m=activateModel(id);
+  if(!m){renderBaseline();return;}
+  state.baselineId=m.id;
+  renderRateCard();renderBaseline();renderTiers();recalc();renderCatalog();
+}
+function selectTierModel(index,id){
+  const m=activateModel(id);
+  if(!m){renderTiers();return;}
+  state.tiers[index].modelId=m.id;
+  renderRateCard();renderBaseline();renderTiers();recalc();renderCatalog();
+}
+function modelOptions(sel){
+  const groups=Object.create(null);
+  const added=new Map(catalogEntries.map(x=>[x.id,Number(x.created)||0]));
+  selectableModels().sort((a,b)=>(added.get(b.orSlug)||0)-(added.get(a.orSlug)||0)||a.name.localeCompare(b.name))
+    .forEach(m=>{(groups[m.provider]=groups[m.provider]||[]).push(m);});
+  return Object.entries(groups).sort(([a],[b])=>a.localeCompare(b)).map(([p,ms])=>
+    `<optgroup label="${esc(p)}">`+ms.map(m=>`<option value="${esc(m.id)}" ${m.id===sel?"selected":""}>${esc(m.name)} — $${m.tokenPricing.inputPerMTok}/$${m.tokenPricing.outputPerMTok}</option>`).join("")+`</optgroup>`).join("");
+}
+function renderBaseline(){
+  const sel=$("#baseline"); sel.innerHTML=modelOptions(state.baselineId); sel.value=state.baselineId;
+}
+
+/* ── Tier cards ──────────────────────────────────────────────── */
+function cacheControls(t,i,R){
+  if(R.cacheMode==="none")
+    return `<div class="full cache-note">No cache pricing on this model's API — cache inputs do not apply.</div>`;
+  let h=`<div class="field"><label>Cache-hit rate %</label>
+    <input type="number" min="0" max="100" step="5" data-i="${i}" data-k="cache" value="${t.cache}" class="num"></div>`;
+  if(R.cacheMode==="read_write"){
+    h+=`<div class="field"><label>Cache write share %</label>
+      <input type="number" min="0" max="100" step="1" data-i="${i}" data-k="cacheWrite" value="${t.cacheWrite||0}" class="num"></div>
+      <div class="field"><label>Cache TTL</label>
+      <select data-i="${i}" data-k="cacheDur"><option value="5m" ${t.cacheDur!=="1h"?"selected":""}>${esc(R.cacheWriteLabel||"5 minutes (bundled)")}</option><option value="1h" ${t.cacheDur==="1h"?"selected":""}>1 hour (requires published rate)</option></select></div>`;
+  } else {
+    h+=`<div class="field"><label>Cache writes</label><div class="cache-note" style="padding:7px 8px">Ordinary input rate used for non-hit tokens; verify write/storage terms.</div></div>`;
+  }
+  return h;
+}
+function renderTiers(){
+  const host=$("#tiers"); host.innerHTML="";
+  const ids=byId();
+  state.tiers.forEach((t,i)=>{
+    const m=ids[t.modelId]||state.models[0]; t.modelId=m.id;
+    const R=m.pricingRules;
+    const batchDisabled=R.batchMode==="none";
+    const el=document.createElement("article");
+    el.className="tier";
+    el.innerHTML=`
+      <div class="tier-head">
+        <span class="ordbadge">T${i+1}</span>
+        <span class="tipwrap" tabindex="0" aria-label="${esc(tierDesc(t))}">
+          <span class="piece" aria-hidden="true">${esc(t.piece)}</span><span class="qi" aria-hidden="true">?</span>
+          <span class="tipbox" role="tooltip">${esc(tierDesc(t))}</span>
+        </span>
+        <input class="tname" data-i="${i}" data-k="name" value="${esc(t.name)}" aria-label="Tier name">
+        <span class="headbtns">
+          ${i>0?`<button class="rm" data-mv="${i}|-1" title="Move earlier in escalation chain">&#9664;</button>`:""}
+          ${i<state.tiers.length-1?`<button class="rm" data-mv="${i}|1" title="Move later in escalation chain">&#9654;</button>`:""}
+          ${state.tiers.length>1?`<button class="rm" data-rm="${i}" title="Remove tier">remove</button>`:""}
+        </span>
+      </div>
+      <div class="tgrid">
+        <div class="field full"><label>Model</label>
+          <select data-i="${i}" data-k="modelId">${modelOptions(t.modelId)}</select></div>
+        <div class="field"><label>Entry share %</label>
+          <input type="number" min="0" max="100" step="1" data-i="${i}" data-k="share" value="${t.share}" class="num"></div>
+        <div class="field"><label>Reasoning &#215; on output</label>
+          <input type="number" min="1" max="4" step="0.25" data-i="${i}" data-k="reason" value="${t.reason}" class="num"></div>
+        <div class="field"><label>Input tokens / request</label>
+          <input type="number" min="0" step="100" data-i="${i}" data-k="tin" value="${t.tin}" class="num"></div>
+        <div class="field"><label>Output tokens / request</label>
+          <input type="number" min="0" step="50" data-i="${i}" data-k="tout" value="${t.tout}" class="num"></div>
+        ${cacheControls(t,i,R)}
+        <div class="field"><label>Batch share %${R.batchMode==="discount"?" (est. discount)":""}</label>
+          <input type="number" min="0" max="100" step="5" data-i="${i}" data-k="batch" value="${batchDisabled?0:t.batch}" ${batchDisabled?"disabled title=\"Batch unavailable/unverified for this model\"":""} class="num"></div>
+        ${i<state.tiers.length-1
+          ?`<div class="field"><label>Escalation to next tier %</label>
+             <input type="number" min="0" max="100" step="1" data-i="${i}" data-k="esc" value="${t.esc||0}" class="num"></div>`
+          :`<div class="field"><label>Escalation</label><div class="cache-note" style="padding:7px 8px">Terminal tier &#8212; failures land here</div></div>`}
+      </div>
+      <div class="tier-out">
+        <span class="money num" id="tcost${i}"></span>
+        <span class="per num" id="tper${i}"></span>
+      </div>
+      <div class="warn" id="twarn${i}"></div>`;
+    host.appendChild(el);
+  });
+  host.querySelectorAll("input,select").forEach(inp=>{
+    inp.addEventListener("input",e=>{
+      const i=+e.target.dataset.i,k=e.target.dataset.k;
+      let v=e.target.value;
+      if(k==="modelId"){selectTierModel(i,v);return;}
+      if(k!=="name"&&k!=="modelId"&&k!=="cacheDur")v=clamp(v,+e.target.min||0,e.target.max?+e.target.max:1e9);
+      state.tiers[i][k]=v;
+      recalc();
+    });
+  });
+  host.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",e=>{
+    state.tiers.splice(+e.currentTarget.dataset.rm,1);renderTiers();recalc();
+  }));
+  host.querySelectorAll("[data-mv]").forEach(b=>b.addEventListener("click",e=>{
+    const [i,d]=e.currentTarget.dataset.mv.split("|").map(Number);
+    const j=i+d; if(j<0||j>=state.tiers.length)return;
+    [state.tiers[i],state.tiers[j]]=[state.tiers[j],state.tiers[i]];
+    renderTiers();recalc();
+  }));
+}
+
+/* ── Rate card ───────────────────────────────────────────────── */
+function priceCell(m,i,field,applicable){
+  const v=m.tokenPricing[field];
+  if(!applicable) return `<td class="dash">—</td>`;
+  if(v==null) return `<td><span class="dash" title="No published price">—</span> <button class="mini" data-setp="${i}|${field}">set</button></td>`;
+  return `<td><input type="number" min="0" step="any" data-mi="${i}" data-mk="${field}" value="${v}" class="num"></td>`;
+}
+function renderRateCard(){
+  const tb=$("#rateTable tbody"); tb.innerHTML="";
+  state.models.forEach((m,i)=>{
+    const R=m.pricingRules;
+    const rw=R.cacheMode==="read_write", hasCache=R.cacheMode!=="none";
+    const expl=R.batchMode==="explicit_prices", disc=R.batchMode==="discount";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td><strong>${esc(m.name)}</strong><span class="prov">${esc(m.provider)}</span></td>
+      <td><span class="chip ${esc(m.refreshStatus)}" title="${esc(m.pricingSource+(m.refreshedAt?" · retrieved "+m.refreshedAt:""))}">${esc(STATUS_LBL[m.refreshStatus]||m.refreshStatus)}</span></td>
+      ${priceCell(m,i,"inputPerMTok",true)}
+      ${priceCell(m,i,"outputPerMTok",true)}
+      ${priceCell(m,i,"cacheReadPerMTok",hasCache)}
+      ${priceCell(m,i,"cacheWrite5mPerMTok",rw)}
+      ${priceCell(m,i,"cacheWrite1hPerMTok",rw)}
+      ${expl?priceCell(m,i,"batchInputPerMTok",true):(disc?`<td class="dash" colspan="2" style="text-align:center">${R.defaultBatchDiscountPct||50}% est. discount</td>`:`<td class="dash">—</td>`)}
+      ${expl?priceCell(m,i,"batchOutputPerMTok",true):(disc?"":`<td class="dash">—</td>`)}
+      <td class="num">${m.ctxK?m.ctxK>=1000?(m.ctxK/1000)+"M":m.ctxK+"K":"Unknown"}</td>
+      <td class="rate-notes" style="font-size:11px;color:var(--muted)">${esc(m.notes||"")}</td>
+      <td style="white-space:nowrap"><button class="mini" data-mr="${i}" title="Restore latest available source values">reset</button>${m.custom?`<button class="mini del" data-md="${i}">delete</button>`:""}</td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",e=>{
+    const m=state.models[+e.target.dataset.mi];
+    m.tokenPricing[e.target.dataset.mk]=clamp(e.target.value,0,1e9);
+    markManual(m); refreshChips(); renderBaseline(); renderTiers(); recalc();
+  }));
+  tb.querySelectorAll("[data-setp]").forEach(b=>b.addEventListener("click",e=>{
+    const [i,f]=e.target.dataset.setp.split("|");
+    const v=prompt("Set "+f+" ($ per 1M tokens):"); if(v==null)return;
+    if(v.trim()===""||!Number.isFinite(Number(v))||Number(v)<0){status("Enter a nonnegative finite price.");return;}
+    const m=state.models[+i]; m.tokenPricing[f]=Number(v); markManual(m);
+    renderRateCard(); renderBaseline(); renderTiers(); recalc();
+  }));
+  tb.querySelectorAll("[data-mr]").forEach(b=>b.addEventListener("click",e=>{
+    const i=+e.target.dataset.mr;
+    const src=sourceModel(state.models[i]);
+    if(src){ state.models[i]=JSON.parse(JSON.stringify(src));
+      renderRateCard(); renderBaseline(); renderTiers(); recalc();
+      status("Reset "+src.name+" to latest available source values."); }
+    else status("No public source is attached to this custom model; edit its rates manually.");
+  }));
+  tb.querySelectorAll("[data-md]").forEach(b=>b.addEventListener("click",e=>{
+    const i=+e.target.dataset.md, dead=state.models[i].id;
+    if(state.models.length===1){status("Keep at least one model.");return;}
+    state.models.splice(i,1);
+    [state.tiers,...state.pins.map(p=>p.tiers)].forEach(ts=>ts.forEach(t=>{if(t.modelId===dead)t.modelId=state.models[0].id;}));
+    if(state.baselineId===dead)state.baselineId=state.models[0].id;
+    renderRateCard(); renderBaseline(); renderTiers(); recalc();renderCatalog();
+  }));
+  $("#rateDate").textContent="— per-model source and retrieval time in status tooltip · bundled fallback "+RATE_DATE;
+}
+function refreshChips(){
+  document.querySelectorAll("#rateTable tbody tr").forEach((tr,i)=>{
+    const m=state.models[i]; if(!m)return;
+    const chip=tr.querySelector(".chip");
+    chip.className="chip "+m.refreshStatus;
+    chip.textContent=STATUS_LBL[m.refreshStatus]||m.refreshStatus;
+    chip.title=m.pricingSource+(m.refreshedAt?" · retrieved "+m.refreshedAt:"");
+    tr.querySelector(".rate-notes").textContent=m.notes||"";
+  });
+}
+
+/* ── Recalc + paint ──────────────────────────────────────────── */
+function recalc(){
+  const ids=byId();
+  if(!ids[state.baselineId]) state.baselineId=state.models[0].id;
+  const S=computeScenario(state.g,state.tiers,ids,state.baselineId);
+  $("#reqTotal").textContent="= "+fmtN(state.g.users*state.g.rpd*state.g.days)+" requests / month across all tiers";
+
+  S.perTier.forEach((p,i)=>{
+    const c=$("#tcost"+i); if(!c)return;
+    c.textContent=fmt$(p.r.total)+" / mo";
+    $("#tper"+i).textContent=fmtN(p.r.entry)+" entry"+(p.r.escIn>0.5?" +"+fmtN(p.r.escIn)+" esc-in":"")+" \u00B7 "+fmt$(p.r.processed?p.r.total/p.r.processed*1000:0)+" per 1K req";
+    const w=p.r.warnings.slice();
+    const totTok=p.tier.tin+p.tier.tout*(p.tier.reason||1);
+    if(p.model.ctxK&&totTok>p.model.ctxK*1000)w.push("Exceeds "+p.model.name+" context ("+(p.model.ctxK>=1000?p.model.ctxK/1000+"M":p.model.ctxK+"K")+").");
+    if(p.model.refreshStatus==="not_found")w.push("Model absent from the current catalog; retained rates may be outdated.");
+    if(p.model.pricingSource==="bundled")w.push("Bundled rates from "+RATE_DATE+"; verify before relying on this estimate.");
+    if(p.model.pricingRules.longContextPolicy==="threshold_multiplier"&&p.tier.tin>272000)w.push("Above 272K input: long-context surcharge applies (2\u00D7 in / 1.5\u00D7 out) — not included in this figure.");
+    $("#twarn"+i).textContent=w.join(" ");
+  });
+
+  const sum=state.tiers.reduce((a,t)=>a+(+t.share||0),0);
+  const badge=$("#shareBadge");
+  badge.textContent="entry shares: "+sum.toFixed(0)+"%";
+  badge.classList.toggle("bad",Math.abs(sum-100)>0.001);
+
+  $("#totalMix").textContent=fmt$(S.mix.total)+" / mo";
+  $("#subMix").textContent=fmt$(S.mix.total*12)+" / yr \u00B7 "+fmt$(S.mix.reqs?S.mix.total/S.mix.reqs*1000:0)+" per 1K req";
+  $("#totalBase").textContent=fmt$(S.baseline)+" / mo";
+  $("#subBase").textContent="everything routed to "+(ids[state.baselineId]||{}).name;
+  const pct=S.baseline>0?S.savings/S.baseline*100:0;
+  $("#deltaLine").innerHTML=(S.savings>=0?'Routing saves <b class="save">':'Routing costs <b class="over">')+fmt$(Math.abs(S.savings))+"</b> / mo ("+Math.abs(pct).toFixed(0)+"%)";
+  $("#discLine").textContent="Discounts captured: "+fmt$(S.mix.cache+S.mix.batch)+"  (cache "+fmt$(S.mix.cache)+" \u00B7 batch "+fmt$(S.mix.batch)+")";
+  const ep=S.escPremium||0, noEsc=S.mix.total-ep;
+  $("#escLine").textContent=ep>0.005
+    ?"Escalation adds "+fmt$(ep)+" (+"+(noEsc>0?(ep/noEsc*100).toFixed(0):"0")+"% vs no-escalation)"
+    :"Escalation: none modeled";
+  const io=S.mix.input+S.mix.output;
+  $("#barIn").style.width=(io?S.mix.input/io*100:50)+"%";
+  $("#barOut").style.width=(io?S.mix.output/io*100:50)+"%";
+
+  const mat=$("#material"); mat.innerHTML="";
+  state.tiers.forEach((t,i)=>{
+    const seg=document.createElement("div");
+    seg.className="seg"; seg.style.width=Math.max(0,t.share)+"%";
+    seg.title=t.name+" — "+t.share+"% entry — "+fmt$(S.perTier[i].r.total)+"/mo on "+S.perTier[i].model.name;
+    seg.textContent=t.piece+" "+t.share+"% \u00B7 "+fmt$(S.perTier[i].r.total);
+    mat.appendChild(seg);
+  });
+
+  renderPins(S); renderSense(ids);persistScenario();
+}
+
+function renderPins(S){
+  const tb=$("#pinTable tbody"); tb.innerHTML="";
+  const ids=byId();
+  if(!state.pins.length){
+    tb.innerHTML=`<tr><td colspan="6" style="color:var(--muted)">No pinned scenarios yet — pin the current setup or add a derived case to compare options side by side.</td></tr>`;
+    return;
+  }
+  state.pins.forEach((p,i)=>{
+    const r=computeScenario(p.g,p.tiers,ids,state.baselineId);
+    const d=r.mix.total-S.mix.total, pct=S.mix.total>0?d/S.mix.total*100:0;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${esc(p.name)}</td>
+      <td class="num">${fmt$(r.mix.total)}</td>
+      <td class="num ${d>0.005?"pos":(d<-0.005?"neg":"")}">${d>=0?"+":"\u2212"}${fmt$(Math.abs(d))}</td>
+      <td class="num ${d>0.005?"pos":(d<-0.005?"neg":"")}">${d>=0?"+":"\u2212"}${Math.abs(pct).toFixed(0)}%</td>
+      <td class="num">${fmt$(r.mix.reqs?r.mix.total/r.mix.reqs*1000:0)}</td>
+      <td><button class="mini del" data-pin="${i}">remove</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll("[data-pin]").forEach(b=>b.addEventListener("click",e=>{
+    state.pins.splice(+e.target.dataset.pin,1);recalc();
+  }));
+}
+
+function renderSense(ids){
+  const host=$("#sense"); host.innerHTML="";
+  const rows=sensitivity(state.g,state.tiers,ids,state.baselineId);
+  const max=Math.max(...rows.map(r=>Math.abs(r.pct)),0.0001);
+  rows.forEach(r=>{
+    const div=document.createElement("div");
+    div.className="sense-row";
+    div.innerHTML=`<span class="lbl">${esc(r.label)}</span>
+      <span class="barbox"><span class="bar ${r.delta>=0?"up":"down"}" style="width:${Math.min(100,Math.abs(r.pct)/max*100)}%"></span></span>
+      <span class="val num ${r.delta>0.005?"pos":(r.delta<-0.005?"neg":"")}">${r.delta>=0?"+":"\u2212"}${fmt$(Math.abs(r.delta))} (${r.delta>=0?"+":"\u2212"}${Math.abs(r.pct).toFixed(1)}%)</span>`;
+    host.appendChild(div);
+  });
+}
+
+/* ── Pins ────────────────────────────────────────────────────── */
+const cpy=o=>JSON.parse(JSON.stringify(o));
+function pin(name,g,tiers){
+  if(state.pins.length>=6){status("Pin limit (6) reached — remove one to add another.");return;}
+  state.pins.push({name,g:cpy(g),tiers:cpy(tiers)});recalc();
+}
+function pinCurrent(){
+  let n=null;
+  try{ n=prompt("Scenario name:","Current"); }catch(e){ n=null; }
+  if(n===null)return;
+  pin(n,state.g,state.tiers);
+}
+function pinHigh(){const g=cpy(state.g);g.users*=2;g.rpd=Math.round(g.rpd*1.25);pin("High adoption (users \u00D72, req \u00D71.25)",g,state.tiers);}
+function pinWorst(){
+  const T=cpy(state.tiers);
+  T.forEach((t,i)=>{t.cache=0;t.cacheWrite=0;t.batch=0;t.reason=Math.min(4,(t.reason||1)*1.5);
+    if(i<T.length-1)t.esc=Math.min(100,(t.esc||0)*1.5);});
+  pin("Worst case (no cache/batch, reasoning \u00D71.5, escalation \u00D71.5)",state.g,T);
+}
+function pinOpt(){
+  const ids=byId(),T=cpy(state.tiers);
+  T.forEach(t=>{const R=(ids[t.modelId]||{pricingRules:{}}).pricingRules;
+    if(R.cacheMode&&R.cacheMode!=="none")t.cache=Math.max(t.cache||0,80);
+    if(R.batchMode&&R.batchMode!=="none")t.batch=Math.max(t.batch||0,50);});
+  pin("Optimized levers (cache \u226580, batch \u226550)",state.g,T);
+}
+
+/* ── Tier + model actions ────────────────────────────────────── */
+function addTier(){
+  state.tiers.push({name:"New tier",piece:PIECE_CYCLE[state.tiers.length%PIECE_CYCLE.length],
+    modelId:state.models[0].id,share:0,tin:2000,tout:400,cache:0,cacheWrite:0,cacheDur:"5m",batch:0,reason:1,esc:0});
+  renderTiers();recalc();
+}
+function loadBlueprint(){
+  // Presets also work after importing a scenario containing a different model set.
+  for(const id of ["gpt-5-4-nano","claude-haiku-4-5","claude-sonnet-4-6"]){
+    if(!state.models.some(m=>m.id===id))state.models.push(sourceModel(BUNDLED_MODELS.find(m=>m.id===id)));
+  }
+  renderRateCard();renderBaseline();renderCatalog();
+  undoSnapshot=cpy(state.tiers);
+  state.tiers=[
+   {name:"Pawns",        piece:"\u265F", modelId:"gpt-5-4-nano",     share:70, tin:500,   tout:80,   cache:70, cacheWrite:0, cacheDur:"5m", batch:0,  reason:1,   esc:10},
+   {name:"Knights",      piece:"\u265E", modelId:"claude-haiku-4-5", share:20, tin:2500,  tout:500,  cache:60, cacheWrite:5, cacheDur:"5m", batch:10, reason:1,   esc:5},
+   {name:"King & Queen", piece:"\u265B", modelId:"claude-sonnet-4-6",share:10, tin:15000, tout:2000, cache:60, cacheWrite:5, cacheDur:"5m", batch:0,  reason:1.5, esc:0}
+  ];
+  renderTiers();recalc();
+  status("Blueprint 3-tier preset loaded: triage on GPT-5.4 Nano (70%), structured execution on Haiku 4.5 (20%), strategic reasoning on Sonnet 4.6 (10%); escalation 10% \u2192 5% \u2192 terminal.");
+  showUndo("Blueprint loaded — replaced your previous tiers.");
+}
+function normalize(){
+  const sum=state.tiers.reduce((a,t)=>a+(+t.share||0),0);
+  if(sum<=0){status("Set at least one tier share above zero, then normalize.");return;}
+  state.tiers.forEach(t=>t.share=+(t.share/sum*100).toFixed(1));
+  const largest=state.tiers.reduce((a,t,i,ts)=>t.share>ts[a].share?i:a,0);
+  state.tiers[largest].share=+(state.tiers[largest].share+100-state.tiers.reduce((a,t)=>a+t.share,0)).toFixed(1);
+  renderTiers();recalc();
+}
+function addCustomModel(){
+  const name=prompt("Model name (e.g., Gemini 3 Pro):");if(!name)return;
+  const provider=prompt("Provider:","Custom")||"Custom";
+  const inRaw=prompt("Input $ per 1M tokens:","1"),outRaw=prompt("Output $ per 1M tokens:","5");
+  if(inRaw==null||outRaw==null)return;
+  const inP=Number(inRaw),outP=Number(outRaw);
+  const crRaw=prompt("Cached-read $ per 1M (blank = no cache discount):","");
+  const cr=crRaw===""||crRaw==null?null:+crRaw;
+  if(![inP,outP,...(cr==null?[]:[cr])].every(v=>Number.isFinite(v)&&v>=0&&v<=1e9)||inRaw.trim()===""||outRaw.trim()===""){
+    status("Custom prices must be finite nonnegative numbers.");return;
+  }
+  const m=M("custom-"+Date.now(),provider,name,"Custom",128,"User-added",null,
+    TP(inP,outP,cr,null,null,null,null),
+    {cacheMode:cr==null?"none":"read_only",batchMode:"none",defaultBatchDiscountPct:null,reasoningBilling:"unknown",longContextPolicy:"unknown"});
+  m.custom=true;markManual(m);
+  state.models.push(m);
+  renderRateCard();renderBaseline();renderTiers();recalc();
+}
+function resetAllRates(){
+  cancelRefresh();
+  state.models=state.models.map(m=>sourceModel(m)||m);
+  renderRateCard();renderBaseline();renderTiers();recalc();
+  status("Overrides reset to the latest cached source rates, or bundled rates where no source is available. Unlinked custom models retained.");
+}
+
+/* ── Export / import ─────────────────────────────────────────── */
+function downloadBlob(content,type,filename){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function exportCSV(){
+  const ids=byId();const S=computeScenario(state.g,state.tiers,ids,state.baselineId);
+  const q=csvCell;
+  const rows=[["Tier","Model","Provider","Pricing status","Entry share %","Escalation %","Entry req/mo","Esc-in req/mo","Processed req/mo","In tok/req","Out tok/req","Cache hit %","Write share %","Cache write duration","Batch %","Batch basis","Reasoning x","Input $","Output $","Tier total $","$ per 1K processed"]];
+  S.perTier.forEach((p,idx)=>rows.push([p.tier.name,p.model.name,p.model.provider,STATUS_LBL[p.model.refreshStatus]||p.model.refreshStatus,
+    p.tier.share,idx<S.perTier.length-1?(p.tier.esc||0):"terminal",Math.round(p.r.entry),Math.round(p.r.escIn),Math.round(p.r.processed),
+    p.tier.tin,p.tier.tout,p.tier.cache,p.tier.cacheWrite||0,p.model.pricingRules.cacheMode==="read_write"?(p.tier.cacheDur==="1h"?"1 hour":p.model.pricingRules.cacheWriteLabel||"5 minutes (bundled)"):"not applicable",p.tier.batch,
+    p.r.batchLabel||"none",p.tier.reason,p.r.inputCost.toFixed(2),p.r.outputCost.toFixed(2),p.r.total.toFixed(2),
+    (p.r.processed?p.r.total/p.r.processed*1000:0).toFixed(3)]));
+  rows.push([]);
+  rows.push(["Blended total $/mo",S.mix.total.toFixed(2)]);
+  rows.push(["Annualized $",(S.mix.total*12).toFixed(2)]);
+  rows.push(["All-baseline ("+ids[state.baselineId].name+") $/mo",S.baseline.toFixed(2)]);
+  rows.push(["Routing savings $/mo",S.savings.toFixed(2)]);
+  rows.push(["Discounts captured (cache+batch) $/mo",(S.mix.cache+S.mix.batch).toFixed(2)]);
+  rows.push(["Escalation premium $/mo",(S.escPremium||0).toFixed(2),"payload overhead "+(state.g.escOverhead!=null?state.g.escOverhead:30)+"%"]);
+  rows.push(["Globals","users="+state.g.users,"req/user/day="+state.g.rpd,"days="+state.g.days,"bundled fallback "+RATE_DATE]);
+  rows.push(["Catalog retrieved at",catalogFetchedAt||"No live catalog; bundled fallback "+RATE_DATE]);
+  rows.push(["Rate source by model","Model","Source","Retrieved at","Status"]);
+  state.models.forEach(m=>rows.push(["Rate source",m.name,m.pricingSource,m.refreshedAt||RATE_DATE,STATUS_LBL[m.refreshStatus]]));
+  rows.push(["Note","Directional estimate for local scenario planning; actual cost may vary by provider terms, cache behavior, tool usage, regional routing, enterprise discounts, and workload shape."]);
+  downloadBlob("\uFEFF"+rows.map(r=>r.map(q).join(",")).join("\n"),"text/csv;charset=utf-8","llm-cost-forecast.csv");
+}
+function saveJSON(){
+  downloadBlob(JSON.stringify({version:2,savedAt:new Date().toISOString(),rateDate:RATE_DATE,state},null,2),
+    "application/json","llm-cost-scenario.json");
+}
+function loadJSON(file){
+  if(file.size>5*1024*1024){status("Scenario file is too large (maximum 5 MiB).");return;}
+  const r=new FileReader();
+  r.onerror=()=>status("Could not read that scenario file.");
+  r.onload=()=>{try{
+    const d=JSON.parse(r.result);
+    if(d.version!=null&&d.version!==1&&d.version!==2)throw new Error("Unsupported scenario version");
+    const next=validateScenario(d.state); // Validate everything before changing the current scenario.
+    cancelRefresh();state=next;
+    syncGlobals();renderRateCard();renderBaseline();renderTiers();recalc();renderCatalog();
+    status("Scenario loaded ("+(d.savedAt||"date unknown")+"). Manual overrides preserved. Refresh to update source rates.");
+  }catch(e){status("Could not load that file: "+e.message+". Current scenario retained.");}};
+  r.readAsText(file);
+}
+
+/* ── Catalog, local persistence, and live refresh ────────────── */
+const CATALOG_URL="https://openrouter.ai/api/v1/models";
+const CATALOG_KEY="pawn.catalog.v1",SCENARIO_KEY="pawn.scenario.v2";
+const REFRESH_AGE_MS=60*60*1000,RETRY_MS=5*60*1000;
+let catalogEntries=[],catalogFetchedAt=null,catalogSkipped=0,catalogLimit=50;
+let refreshController=null,refreshGeneration=0,lastAttempt=0,storageUnavailable=false;
+function persistScenario(){
+  try{localStorage.setItem(SCENARIO_KEY,JSON.stringify(state));}
+  catch(e){storageUnavailable=true;}
+}
+function restoreLocal(){
+  let message="Bundled starting rates loaded ("+RATE_DATE+").";
+  try{
+    const saved=localStorage.getItem(SCENARIO_KEY);
+    if(saved){state=validateScenario(JSON.parse(saved));message="Local scenario restored.";}
+  }catch(e){message="Saved scenario could not be restored; bundled fallback loaded.";}
+  try{
+    const c=JSON.parse(localStorage.getItem(CATALOG_KEY)||"null");
+    if(c){
+      const at=Date.parse(c.fetchedAt);
+      if(c.version!==1||!Number.isFinite(at)||at>Date.now()+60000)throw new Error("Invalid cache timestamp");
+      const normalized=normalizeCatalog(c.entries);
+      catalogEntries=normalized.entries;catalogFetchedAt=c.fetchedAt;catalogSkipped=Number.isFinite(c.skipped)?c.skipped:0;
+      const cached=mergeCatalog(state.models,catalogEntries,catalogFetchedAt).models;
+      state.models=state.models.map((m,i)=>Date.parse(m.refreshedAt)>at?m:cached[i]);
+    }
+  }catch(e){ /* A corrupt or unavailable cache never prevents startup. */ }
+  return message;
+}
+function sourceModel(m){
+  const x=catalogEntries.find(x=>x.id===m.orSlug);
+  if(x)return catalogModel(x,catalogEntries,catalogFetchedAt,m);
+  const bundled=BUNDLED_MODELS.find(x=>x.id===m.id);
+  return bundled?cpy(bundled):null;
+}
+function catalogAge(){return catalogFetchedAt?Math.max(0,Date.now()-Date.parse(catalogFetchedAt)):Infinity;}
+function renderCatalog(){
+  const provider=$("#catalogProvider"),selection=provider.value;
+  provider.innerHTML='<option value="">All providers</option>'+[...new Set(catalogEntries.filter(x=>!x.id.endsWith(":batch")).map(x=>x.id.split("/")[0]))]
+    .sort().map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join("");
+  provider.value=selection;
+  const query=$("#catalogSearch").value.trim().toLowerCase(),filter=provider.value,sort=$("#catalogSort").value;
+  const available=new Set(state.models.map(m=>m.orSlug));
+  const rows=catalogEntries.filter(x=>!x.id.endsWith(":batch") && (!filter||x.id.split("/")[0]===filter) &&
+    (!query||(x.name+" "+x.id).toLowerCase().includes(query)));
+  rows.sort((a,b)=>sort==="name"?a.name.localeCompare(b.name):sort==="input"?tokenRate(a.pricing.prompt)-tokenRate(b.pricing.prompt):
+    sort==="output"?tokenRate(a.pricing.completion)-tokenRate(b.pricing.completion):(Number(b.created)||0)-(Number(a.created)||0));
+  const count=catalogEntries.filter(x=>!x.id.endsWith(":batch")).length;
+  $("#catalogInfo").textContent=catalogFetchedAt
+    ?count+" models · "+rows.length+" match · catalog retrieved "+new Date(catalogFetchedAt).toLocaleString()+
+      (catalogAge()>=REFRESH_AGE_MS?" · STALE: refresh due":" · refresh interval: 1 hour")+
+      (catalogSkipped?" · "+catalogSkipped+" entries excluded (unpriced, unsupported, or expired)":"")+
+      (storageUnavailable?" · Browser storage unavailable; save JSON to keep changes.":"")
+    :"No live catalog loaded. Bundled rates from "+RATE_DATE+" remain available. Connect and use Refresh models & prices.";
+  $("#catalogResults").innerHTML=rows.length?`<table aria-label="Available models"><thead><tr><th>Model / source</th><th>In $/1M</th><th>Out $/1M</th><th>Added to OpenRouter</th><th></th></tr></thead><tbody>`+
+    rows.slice(0,catalogLimit).map(x=>{
+      const d=Number(x.created)*1000,added=Number.isFinite(d)&&d>0&&d<8.64e15?new Date(d).toISOString().slice(0,10):"Unknown";
+      return `<tr><td><a class="source-link" href="https://openrouter.ai/${encodeURI(x.id)}" target="_blank" rel="noopener noreferrer">${esc(x.name)}</a><span class="prov">${esc(x.id)}</span></td><td class="num">${tokenRate(x.pricing.prompt)}</td><td class="num">${tokenRate(x.pricing.completion)}</td><td>${added}</td><td><button class="lt" data-catalog="${esc(x.id)}" ${available.has(x.id)?"disabled":""}>${available.has(x.id)?"Added":"Add model"}</button></td></tr>`;
+    }).join("")+"</tbody></table>":'<p class="hint">'+(catalogEntries.length?"No matching models.":"The live catalog appears here after a successful refresh.")+"</p>";
+  $("#catalogMore").hidden=rows.length<=catalogLimit;
+  $("#catalogResults").querySelectorAll("[data-catalog]").forEach(b=>b.addEventListener("click",()=>{
+    const x=catalogEntries.find(x=>x.id===b.dataset.catalog);
+    if(!x||state.models.some(m=>m.orSlug===x.id))return;
+    const option=selectableModels().find(m=>m.orSlug===x.id);
+    if(!option||!activateModel(option.id))return;
+    renderRateCard();renderBaseline();renderTiers();recalc();renderCatalog();
+    status(x.name+" added. Select it in a routing tier or the baseline to compare costs.");
+  }));
+}
+function cancelRefresh(){
+  refreshGeneration++;refreshController?.abort();refreshController=null;
+  $("#btnRefresh").disabled=false;$("#btnRefresh").textContent="Refresh models & prices";
+}
+async function fetchCatalog(signal){
+  const rows=[],visited=new Set();let url=CATALOG_URL,total=0;
+  while(url){
+    const nextURL=new URL(url,CATALOG_URL);
+    if(nextURL.origin!=="https://openrouter.ai"||nextURL.pathname!=="/api/v1/models"||visited.has(nextURL.href)||visited.size>=20)
+      throw new Error("Invalid or excessive catalog pagination");
+    visited.add(nextURL.href);
+    const resp=await fetch(nextURL.href,{signal,cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer",redirect:"error"});
+    if(!resp.ok)throw new Error("HTTP "+resp.status);
+    const data=await resp.json();
+    if(!Array.isArray(data.data)||!data.data.length)throw new Error("Empty or invalid catalog response");
+    rows.push(...data.data);
+    if(Number.isInteger(data.total_count)&&data.total_count>=0)total=Math.max(total,data.total_count);
+    url=data.links?.next??null;
+    if(url!=null&&typeof url!=="string")throw new Error("Invalid pagination link");
+  }
+  if(total>rows.length)throw new Error("Incomplete catalog response: "+rows.length+" of "+total);
+  return normalizeCatalog(rows);
+}
+async function refreshRates(){
+  if(refreshController)return;
+  const controller=new AbortController(),generation=++refreshGeneration;
+  refreshController=controller;lastAttempt=Date.now();
+  const button=$("#btnRefresh");button.disabled=true;button.textContent="Refreshing…";
+  status("Downloading model catalog and published token prices from OpenRouter…");
+  const timeout=setTimeout(()=>controller.abort(),20000);
+  try{
+    const normalized=await fetchCatalog(controller.signal);
+    if(generation!==refreshGeneration)return;
+    if(controller.signal.aborted)throw new Error("Refresh timed out");
+    const ts=new Date().toISOString();
+    const merged=mergeCatalog(state.models,normalized.entries,ts);
+    // Commit only after all pages and prices pass validation. Manual edits made during the request survive.
+    catalogEntries=normalized.entries;catalogSkipped=normalized.skipped;catalogFetchedAt=ts;state.models=merged.models;
+    try{localStorage.setItem(CATALOG_KEY,JSON.stringify({version:1,fetchedAt:ts,entries:catalogEntries,skipped:catalogSkipped}));}
+    catch(e){storageUnavailable=true;}
+    renderRateCard();renderBaseline();renderTiers();recalc();renderCatalog();
+    status("Catalog refreshed: "+catalogEntries.filter(x=>!x.id.endsWith(":batch")).length+" models; "+merged.counts.updated+" active rates updated, "+merged.counts.manual+" manual preserved, "+merged.counts.missing+" absent (last rates retained). Retrieved "+new Date(ts).toLocaleString()+".");
+  }catch(e){
+    if(generation!==refreshGeneration)return;
+    renderCatalog();
+    status("Refresh failed: "+(controller.signal.aborted?"20-second timeout":e.message)+". Last successful catalog and current rates retained. "+
+      (catalogFetchedAt?"Last retrieval: "+new Date(catalogFetchedAt).toLocaleString()+".":"Using bundled/manual rates.")+" Retry with Refresh models & prices.");
+  }finally{
+    clearTimeout(timeout);
+    if(generation===refreshGeneration){refreshController=null;button.disabled=false;button.textContent="Refresh models & prices";}
+  }
+}
+function autoRefresh(){
+  if(document.visibilityState!=="hidden"&&catalogAge()>=REFRESH_AGE_MS&&Date.now()-lastAttempt>=RETRY_MS)void refreshRates();
+}
+
+/* ── Print: open collapsed sections, restore after ───────────── */
+let printState=null;
+window.addEventListener("beforeprint",()=>{
+  printState=[...document.querySelectorAll("details")].map(d=>d.open);
+  document.querySelectorAll("details").forEach(d=>d.open=true);
+});
+window.addEventListener("afterprint",()=>{
+  if(printState)[...document.querySelectorAll("details")].forEach((d,i)=>d.open=printState[i]);
+  printState=null;
+});
+
+/* ── Init (static listeners bound exactly once) ──────────────── */
+document.addEventListener("DOMContentLoaded",()=>{
+  bindGlobalOnce("users","usersR","users");
+  bindGlobalOnce("rpd","rpdR","rpd");
+  bindGlobalOnce("days","daysR","days");
+  { const n=$("#escOverhead"), r=$("#escOverheadR");
+    const apply=v=>{state.g.escOverhead=clamp(v,0,200);n.value=state.g.escOverhead;r.value=Math.min(+r.max,state.g.escOverhead);recalc();};
+    n.addEventListener("input",e=>apply(e.target.value));
+    r.addEventListener("input",e=>apply(e.target.value)); }
+  $("#btnBlueprint").addEventListener("click",loadBlueprint);
+  $("#baseline").addEventListener("change",e=>selectBaselineModel(e.target.value));
+  $("#btnRefresh").addEventListener("click",refreshRates);
+  $("#btnCSV").addEventListener("click",exportCSV);
+  $("#btnSave").addEventListener("click",saveJSON);
+  $("#btnLoad").addEventListener("click",()=>$("#fileLoad").click());
+  $("#fileLoad").addEventListener("change",e=>{if(e.target.files[0])loadJSON(e.target.files[0]);e.target.value="";});
+  $("#btnPrint").addEventListener("click",()=>window.print());
+  $("#btnAddTier").addEventListener("click",addTier);
+  $("#btnNormalize").addEventListener("click",normalize);
+  $("#btnAddModel").addEventListener("click",addCustomModel);
+  $("#btnResetRates").addEventListener("click",resetAllRates);
+  $("#pinCurrent").addEventListener("click",pinCurrent);
+  $("#pinHigh").addEventListener("click",pinHigh);
+  $("#pinWorst").addEventListener("click",pinWorst);
+  $("#pinOpt").addEventListener("click",pinOpt);
+  ["catalogSearch","catalogProvider","catalogSort"].forEach(id=>$("#"+id).addEventListener("input",()=>{catalogLimit=50;renderCatalog();}));
+  $("#catalogMore").addEventListener("click",()=>{catalogLimit+=50;renderCatalog();});
+  const restored=restoreLocal();
+  syncGlobals();renderRateCard();renderBaseline();renderTiers();recalc();renderCatalog();
+  status(restored+" Refresh checks for new models and prices; your selected tiers stay in place.");
+  autoRefresh();
+  setInterval(autoRefresh,60000);
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState!=="hidden"){renderCatalog();autoRefresh();}});
+  window.addEventListener("online",()=>{lastAttempt=0;autoRefresh();});
+});
+</script>
+</div>
+<script>
+/* ===== DEMO MODE — the app's own code, with the catalog served from a snapshot, nothing stored, and the scene picked by hash ===== */
+(function () {
+  "use strict";
+
+  // 1. Storage: an in-memory stand-in, so opening the demo never touches the scenario saved by the real app on this origin.
+  const mem = new Map();
+  const shim = {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => { mem.set(String(k), String(v)); },
+    removeItem: (k) => { mem.delete(k); },
+    clear: () => mem.clear(),
+    key: (i) => [...mem.keys()][i] ?? null,
+    get length() { return mem.size; },
+  };
+  try { Object.defineProperty(window, "localStorage", { value: shim, configurable: true }); } catch (e) { /* keep the real one */ }
+
+  // 2. Catalog: the public OpenRouter list as captured on 2026-10-15 (review/catalog-2026-10-15.json), served through the
+  //    app's own fetch/normalize/merge path with a short, believable round trip. No live request leaves the page.
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async function (url, opts) {
+    if (!String(url).startsWith(CATALOG_URL)) return realFetch(url, opts);
+    const r = await realFetch("review/catalog-2026-10-15.json", { cache: "no-store" });
+    const j = await r.json();
+    await new Promise((res) => setTimeout(res, 700));
+    return new Response(JSON.stringify({ data: j.data, total_count: j.total_count, links: { next: null } }), {
+      status: 200, headers: { "content-type": "application/json" },
+    });
+  };
+
+  // 3. Dialogs: a headless recorder cannot answer prompt(); "Pin current" takes the suggested name.
+  window.prompt = (msg, def) => def || "Current";
+
+  // 4. Stage: at the recorder's 2400x1350 viewport the page is drawn at 1.5x so camera zooms stay sharp; the recorder's own
+  //    overlays live outside #stage and are enlarged to match.
+  if (window.innerWidth >= 2300) {
+    const css = document.createElement("style");
+    css.textContent = `
+      #stage{zoom:1.5}
+      #__cursor{width:42px!important;height:42px!important}
+      #__cursor svg{width:42px!important;height:42px!important}
+      #__ripple{width:66px!important;height:66px!important;margin:-33px 0 0 -33px!important;border-width:4px!important}
+      #__spot{border-radius:14px!important;outline-width:3px!important}`;
+    document.head.appendChild(css);
+  }
+
+  // 5. Scene setup by hash: scroll the section the scene is about to the top once the catalog has loaded, then flag ready.
+  const top = (sel) => {
+    const el = document.querySelector(sel);
+    const box = el && (el.closest("section, details") || el);
+    if (box) box.scrollIntoView({ block: "start", behavior: "auto" });
+    window.scrollBy(0, -12);
+  };
+  const SETUP = {
+    drivers: () => window.scrollTo(0, 0),
+    tiers: () => top("#shareBadge"),
+    select: () => top("#shareBadge"),
+    discover: () => top("#catalogTitle"),
+    rates: () => top("#rateBox"),
+    scenarios: () => top("#pinCurrent"),
+  };
+  window.addEventListener("DOMContentLoaded", () => {
+    const scene = location.hash.slice(1);
+    const poll = setInterval(() => {
+      if (!catalogFetchedAt || refreshController) return;
+      clearInterval(poll);
+      (SETUP[scene] || SETUP.drivers)();
+      setTimeout(() => {
+        const flag = document.createElement("div");
+        flag.id = "stageReady"; flag.hidden = true; flag.textContent = "ready";
+        document.body.appendChild(flag);
+      }, 80);
+    }, 50);
+  });
+})();
+</script>
+</body>
+</html>

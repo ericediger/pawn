@@ -1,0 +1,82 @@
+{
+  "evaluatedAt": "2026-10-15T21:11:33.279Z",
+  "source": "https://openrouter.ai/api/v1/models",
+  "sourceMode": "previously downloaded public snapshot",
+  "rawEntries": 463,
+  "usableEntries": 456,
+  "selectableModels": 379,
+  "batchVariants": 77,
+  "excludedEntries": 7,
+  "bundledMatches": 11,
+  "missingBundledIds": [
+    "mistralai/mistral-large-3",
+    "mistralai/magistral-medium",
+    "mistralai/ministral-3-8b"
+  ],
+  "evaluatedStreams": 3648,
+  "exampleCurrentModels": [
+    {
+      "id": "google/gemini-4-argon",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "image": "0.000002",
+        "audio": "0.000002",
+        "input_audio_cache": "0.0000001",
+        "web_search": "0.014",
+        "internal_reasoning": "0.00001",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.0000001875"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-sol",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "web_search": "0.01",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.0000025",
+        "overrides": [
+          {
+            "min_prompt_tokens": 272000,
+            "prompt": "0.000004",
+            "completion": "0.000015",
+            "input_cache_read": "0.0000002",
+            "input_cache_write": "0.000005"
+          }
+        ]
+      }
+    },
+    {
+      "id": "openai/gpt-6-astra",
+      "pricing": {
+        "prompt": "0.00001",
+        "completion": "0.00005",
+        "web_search": "0.01",
+        "input_cache_read": "0.000001",
+        "input_cache_write": "0.0000125",
+        "overrides": [
+          {
+            "min_prompt_tokens": 272000,
+            "prompt": "0.00002",
+            "completion": "0.000075",
+            "input_cache_read": "0.000002",
+            "input_cache_write": "0.000025"
+          }
+        ]
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5.1",
+      "pricing": {
+        "prompt": "0.00001",
+        "completion": "0.00005",
+        "web_search": "0.01",
+        "input_cache_read": "0.00000025",
+        "input_cache_write": "0.0000125",
+        "input_cache_write_1h": "0.00002"
+      }
+    }
+  ]
+}

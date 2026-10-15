@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# dependencies (none today; keeps future installs out)
+node_modules/
+
+# local tool config
+.claude/

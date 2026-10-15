@@ -1,0 +1,11 @@
+{
+  "name": "pawn-llm-cost-forecaster",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone LLM cost forecaster with a live public model catalog",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "start": "python3 -m http.server 8765 --bind 127.0.0.1"
+  }
+}
